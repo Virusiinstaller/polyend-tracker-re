@@ -75,8 +75,8 @@ struct TrackEqSet {
 inline bool eqUsesGain(uint8_t type) { return type == kEqPeak || type == kEqLowShelf || type == kEqHighShelf; }
 const char* eqTypeName(uint8_t type);
 
-// Factory layout of band i (all bands off): low shelf 100 Hz, bells at 500 Hz
-// and 2.5 kHz, high shelf 8 kHz.
+// Factory layout of band i (all bands off): low cut 80 Hz, bells at 500 Hz
+// and 2.5 kHz, high cut 12 kHz.
 EqBand eqDefaultBand(int index);
 // Clamp every field into its legal range (type to a valid value).
 void eqSanitize(EqBand& b);

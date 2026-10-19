@@ -31,8 +31,8 @@ TEST(eq_page_labels_and_selection) {
     CHECK_STR(a.ui.bar.label[0].top, "Band 1");
     CHECK_STR(a.ui.bar.label[0].bottom, "Off");
     CHECK_STR(a.ui.bar.label[4].top, "Type");
-    CHECK_STR(a.ui.bar.label[4].bottom, "Low Shelf");   // band 1 default
-    CHECK_STR(a.ui.bar.label[5].bottom, "100 Hz");
+    CHECK_STR(a.ui.bar.label[4].bottom, "Low Cut");   // band 1 default
+    CHECK_STR(a.ui.bar.label[5].bottom, "80 Hz");
     CHECK_EQ(m.eqBand, 0);
     // F3 selects band 3 (no toggle); a second F3 turns it on.
     h.tap(btn::F3);

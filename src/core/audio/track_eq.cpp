@@ -29,10 +29,10 @@ const char* eqTypeName(uint8_t type) {
 EqBand eqDefaultBand(int index) {
     EqBand b;
     switch (index) {
-        case 0: b.type = kEqLowShelf; b.freqHz = 100; b.q100 = 71; break;
+        case 0: b.type = kEqLowCut; b.freqHz = 80; b.q100 = 71; break;
         case 1: b.type = kEqPeak; b.freqHz = 500; b.q100 = 100; break;
         case 2: b.type = kEqPeak; b.freqHz = 2500; b.q100 = 100; break;
-        default: b.type = kEqHighShelf; b.freqHz = 8000; b.q100 = 71; break;
+        default: b.type = kEqHighCut; b.freqHz = 12000; b.q100 = 71; break;
     }
     b.on = false;
     b.gainDb10 = 0;

@@ -63,10 +63,11 @@ TEST(eq_defaults_and_sanitize) {
             CHECK(!s.track[t].band[i].on);
             CHECK_EQ(s.track[t].band[i].gainDb10, 0);
         }
-    CHECK_EQ(s.track[3].band[0].type, kEqLowShelf);
+    CHECK_EQ(s.track[3].band[0].type, kEqLowCut);
     CHECK_EQ(s.track[3].band[1].type, kEqPeak);
-    CHECK_EQ(s.track[3].band[3].type, kEqHighShelf);
-    CHECK_EQ(s.track[0].band[3].freqHz, 8000);
+    CHECK_EQ(s.track[3].band[3].type, kEqHighCut);
+    CHECK_EQ(s.track[0].band[3].freqHz, 12000);
+    CHECK_EQ(s.track[0].band[0].freqHz, 80);
 
     EqBand b = band(200, 5, 9999, 0);
     eqSanitize(b);

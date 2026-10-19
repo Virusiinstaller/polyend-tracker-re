@@ -16,6 +16,8 @@ Press **Master** until the page titled **Track EQ** appears (Master -> Track Mix
 | Shift + jog | coarse steps |
 | Delete | reset the selected band to its default |
 
+Defaults: band 1 is a Low Cut (80 Hz), bands 2 and 3 are Bells (500 Hz, 2.5 kHz), band 4 is a High Cut (12 kHz); all start off. Any band can be changed to any type.
+
 Band types: Bell, Low Shelf, High Shelf, Low Cut (12 dB/oct), High Cut (12 dB/oct), Notch. Cut and Notch have no
 gain (as in EQ Eight). Steps: frequency 1/24 octave (coarse 1/6), gain 0.5 dB (coarse 3 dB), Q x1.06 (coarse x1.5).
 Ranges: 20 Hz..20 kHz, +-15 dB, Q 0.10..18.00.
