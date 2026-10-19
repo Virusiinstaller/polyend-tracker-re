@@ -221,6 +221,16 @@ double timeBlocks(Rig& r, int n, const int16_t* lineIn) {
 // (292,000 - 167,000) / 3,712 = ~34 cycles per access. The engine now uses
 // sequential 32-bit accesses, so this is on the pessimistic side.
 constexpr double kSdramCycles = 34.0;
+
+// Track EQ benchmark settings: n active bands (a bell, low shelf, high shelf, notch).
+TrackEqParams eqBands(int n) {
+    TrackEqParams p;
+    const EqBand b[4] = {{kEqPeak, 1, 1000, 60, 100}, {kEqLowShelf, 1, 120, 50, 71},
+                         {kEqHighShelf, 1, 8000, -50, 71}, {kEqNotch, 1, 3000, 0, 300}};
+    for (int i = 0; i < n && i < 4; ++i) p.band[i] = b[i];
+    return p;
+}
+
 void report(const char* name, double v) {
 #ifdef OT_BENCH_M4
     const double est = v + gAccPerBlock * kSdramCycles;
@@ -634,6 +644,16 @@ void components() {
         t0 = nowUnits();
         for (int b = 0; b < n; ++b) v.render(c, o, ds, rs);
         std::printf("    v.render %10.1f  (plain loop voice)\n", (nowUnits() - t0) / n);
+        for (int bands : {1, 4}) {
+            v.setEq(eqBands(bands));
+            t0 = nowUnits();
+            for (int b = 0; b < n; ++b) v.render(c, o, ds, rs);
+            std::printf("    v.render %10.1f  (+ track EQ, %d band%s)\n", (nowUnits() - t0) / n, bands, bands > 1 ? "s" : "");
+        }
+        v.setEq(TrackEqParams());   // all off again: back to the plain voice
+        t0 = nowUnits();
+        for (int b = 0; b < n; ++b) v.render(c, o, ds, rs);
+        std::printf("    v.render %10.1f  (EQ switched off again)\n", (nowUnits() - t0) / n);
         r.ins[0].filterEnabled = 1;
         r.ins[0].cutoff = 0.5f;
         v.control(c);
@@ -658,6 +678,11 @@ void components() {
         t0 = nowUnits();
         for (int b = 0; b < n; ++b) v.render(c, o, ds, rs, ml, mr, false);
         std::printf("    v.render %10.1f  (stereo, fused)\n", (nowUnits() - t0) / n);
+        v.setEq(eqBands(4));
+        t0 = nowUnits();
+        for (int b = 0; b < n; ++b) v.render(c, o, ds, rs, ml, mr, false);
+        std::printf("    v.render %10.1f  (stereo + track EQ, 4 bands)\n", (nowUnits() - t0) / n);
+        v.setEq(TrackEqParams());
         r.ins[0].filterEnabled = 1;
         r.ins[0].cutoff = 0.5f;
         v.control(c);

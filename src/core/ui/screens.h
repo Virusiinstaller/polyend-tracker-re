@@ -321,10 +321,15 @@ public:
     void onEncoder(int d) override;
     bool ownsModuleKey(uint8_t id) const override { return id == btn::Master; }
 
-    int page = 0;           // 0 master, 1 track mixer, 2 global mixer
+    int page = 0;           // 0 master, 1 track mixer, 2 global mixer, 3 track EQ (OpenTracker)
     int sub = 0;            // master sub-page: 0 main, 1 reverb, 2 delay, 3 limiter, 4 EQ
     int param = 0;          // selected parameter on the (sub-)page
     bool rename = false;
+    // Track EQ page: track 0..7 (Left / Right), band 0..3 (F1..F4), parameter
+    // 0 type, 1 freq, 2 gain, 3 Q (F5..F8). The jog wheel edits it, Shift = coarse.
+    int eqTrack = 0;
+    int eqBand = 0;
+    int eqParam = 1;
     // 2.x Track Mixer bank (docs/specs/2x-01 §4): 0 = tracks 1-8, 1 = tracks
     // 9-16; Left / Right switch it.
     int bank = 0;
@@ -359,6 +364,9 @@ private:
     void mixerKey(int i, uint8_t state);
     void updateActivity(uint32_t now);
     void drawBankB(Gfx& g, uint32_t off);
+    void eqKey(int f);
+    void eqChange(int d);
+    void drawTrackEq(Gfx& g);
     bool held_[8] = {};
     bool changed_[8] = {};
     // Master key (spec 06 §4.1): snapshot taken on press.

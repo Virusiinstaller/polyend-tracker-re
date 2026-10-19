@@ -1,0 +1,44 @@
+# Per-track 4-band EQ (OpenTracker extension)
+
+An EQ Eight-style parametric insert on each of the eight sample tracks. Four bands per track; each band has a
+type, frequency, gain and Q, and an on/off switch.
+
+## Using it
+
+Press **Master** until the page titled **Track EQ** appears (Master -> Track Mixer -> Global Mixer -> Track EQ).
+
+| Control | Action |
+| --- | --- |
+| Left / Right | previous / next track (1..8) |
+| F1..F4 | select band 1..4; pressing the selected band again switches it on / off |
+| F5..F8 | choose what the jog wheel edits: Type, Freq, Gain, Q |
+| Jog wheel / Up / Down | edit the chosen value (editing a band switches it on) |
+| Shift + jog | coarse steps |
+| Delete | reset the selected band to its default |
+
+Band types: Bell, Low Shelf, High Shelf, Low Cut (12 dB/oct), High Cut (12 dB/oct), Notch. Cut and Notch have no
+gain (as in EQ Eight). Steps: frequency 1/24 octave (coarse 1/6), gain 0.5 dB (coarse 3 dB), Q x1.06 (coarse x1.5).
+Ranges: 20 Hz..20 kHz, +-15 dB, Q 0.10..18.00.
+
+The graph shows the combined response of the four bands (log frequency, +-15 dB) and a marker per band.
+
+## Signal path
+
+voice -> envelope -> bit crusher -> overdrive -> filter -> **track EQ** -> delay / reverb sends -> volume -> pan.
+The sends therefore carry the EQ'd sound. A stereo sample runs the same settings on both channels (separate filter
+state). A band at 0 dB (bell / shelves) or switched off costs nothing; with no active band the voice takes exactly the
+same code path as before, so output is bit-identical to a build without the EQ.
+
+## Saving
+
+project.mt is a fixed-size stock file and is not touched. The EQ is saved in `track_eq.ote` (268 bytes, versioned,
+CRC-32) next to it, in the project folder and in the Workspace (autosave). No file = EQ off. Projects that never
+used the EQ get no file. Stock firmware ignores the extra file. Format: `src/core/formats/track_eq_file.h`.
+
+## Code
+
+* `src/core/audio/track_eq.{h,cpp}` - parameters, RBJ cookbook biquads (transposed direct form II, float), response.
+* `src/core/audio/voice*.{h,cpp}`, `engine.{h,cpp}` - insert point and per-block parameter hand-over.
+* `src/core/ui/screen_mixer.cpp` - the Track EQ page (MixerScreen page 3).
+* `src/core/app/project_io.cpp`, `app.{h,cpp}` - persistence hooks (new / open / save / autosave / workspace load).
+* Tests: `track_eq_test`, `track_eq_ui_test`, `track_eq_file_test`; benchmark lines in `audio_bench`.
