@@ -62,8 +62,10 @@ void eqFreqText(int hz, char* out, int cap) {
     if (hz < 1000) std::snprintf(out, size_t(cap), "%d Hz", hz);
     else std::snprintf(out, size_t(cap), "%.2f kHz", double(hz) / 1000.0);
 }
-void eqGainText(const audio::EqBand& b, char* out, int cap) {
-    if (!audio::eqUsesGain(b.type)) std::snprintf(out, size_t(cap), "-");
+// The third value of a band: gain, or the cut slope on the cuts of bands 1 and 4.
+void eqGainText(const audio::EqBand& b, int index, char* out, int cap) {
+    if (audio::eqSlopeAllowed(index, b.type)) std::snprintf(out, size_t(cap), b.slope ? "48 dB" : "12 dB");
+    else if (!audio::eqUsesGain(b.type)) std::snprintf(out, size_t(cap), "-");
     else std::snprintf(out, size_t(cap), "%+.1f dB", double(b.gainDb10) / 10.0);
 }
 void eqQText(const audio::EqBand& b, char* out, int cap) {
@@ -252,8 +254,9 @@ void MixerScreen::refreshBar() {
         b.set(4, "Type", audio::eqTypeName(bd.type));
         eqFreqText(bd.freqHz, v, sizeof(v));
         b.set(5, "Freq", v);
-        eqGainText(bd, v, sizeof(v));
-        b.set(6, "Gain", v, audio::eqUsesGain(bd.type));
+        eqGainText(bd, eqBand, v, sizeof(v));
+        const bool slopeParam = audio::eqSlopeAllowed(eqBand, bd.type);
+        b.set(6, slopeParam ? "Slope" : "Gain", v, slopeParam || audio::eqUsesGain(bd.type));
         eqQText(bd, v, sizeof(v));
         b.set(7, "Q", v);
         b.highlight(4 + eqParam, true);
@@ -388,9 +391,16 @@ void MixerScreen::eqChange(int d) {
     audio::EqBand& bd = app_.trackEq.track[eqTrack].band[eqBand];
     const bool coarse = ui_.shift();
     switch (eqParam) {
-        case 0: bd.type = audio::eqStepType(bd.type, d > 0 ? 1 : -1); break;
+        case 0:
+            bd.type = audio::eqStepType(bd.type, d > 0 ? 1 : -1);
+            if (!audio::eqSlopeAllowed(eqBand, bd.type)) bd.slope = 0;   // no hidden 48 dB on a bell
+            break;
         case 1: bd.freqHz = audio::eqStepFreq(bd.freqHz, d, coarse); break;
         case 2:
+            if (audio::eqSlopeAllowed(eqBand, bd.type)) {   // 12 <-> 48 dB/oct
+                bd.slope = bd.slope ? 0 : 1;
+                break;
+            }
             if (!audio::eqUsesGain(bd.type)) return;
             bd.gainDb10 = audio::eqStepGain(bd.gainDb10, d, coarse);
             break;
@@ -894,7 +904,7 @@ void MixerScreen::drawTrackEq(Gfx& g) {
         const uint32_t c = bd.on ? ink : dim;
         g.text(50 + 100 * i, 301, kFont4, c, hd, IDisplay::kOptCenter);
         eqFreqText(bd.freqHz, f, sizeof(f));
-        eqGainText(bd, gn, sizeof(gn));
+        eqGainText(bd, i, gn, sizeof(gn));
         eqQText(bd, q, sizeof(q));
         const char* rows[4] = {audio::eqTypeName(bd.type), f, gn, q};
         for (int k = 0; k < 4; ++k) g.text(50 + 100 * i, 327 + 24 * k, kFont1, c, rows[k], IDisplay::kOptCenter);
@@ -904,14 +914,15 @@ void MixerScreen::drawTrackEq(Gfx& g) {
         const audio::EqBand& bd = tp.band[eqBand];
         char f[24], gn[24], q[24];
         eqFreqText(bd.freqHz, f, sizeof(f));
-        eqGainText(bd, gn, sizeof(gn));
+        eqGainText(bd, eqBand, gn, sizeof(gn));
         eqQText(bd, q, sizeof(q));
-        const char* names[4] = {"Type", "Freq", "Gain", "Q"};
+        const bool slopeCol = audio::eqSlopeAllowed(eqBand, bd.type);
+        const char* names[4] = {"Type", "Freq", slopeCol ? "Slope" : "Gain", "Q"};
         const char* vals[4] = {audio::eqTypeName(bd.type), f, gn, q};
         for (int k = 0; k < 4; ++k) {
             const int x = colX(4 + k);
             wg::panel(g, th, x, 288, 96, 135, panelC);
-            const bool off = !bd.on || (k == 2 && !audio::eqUsesGain(bd.type));
+            const bool off = !bd.on || (k == 2 && !slopeCol && !audio::eqUsesGain(bd.type));
             g.text(x + 48, 301, kFont4, off ? dim : ink, names[k], IDisplay::kOptCenter);
             g.text(x + 48, 360, kFont1, off ? dim : ink, vals[k], IDisplay::kOptCenter);
         }

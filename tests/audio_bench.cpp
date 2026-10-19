@@ -650,6 +650,15 @@ void components() {
             for (int b = 0; b < n; ++b) v.render(c, o, ds, rs);
             std::printf("    v.render %10.1f  (+ track EQ, %d band%s)\n", (nowUnits() - t0) / n, bands, bands > 1 ? "s" : "");
         }
+        {   // bands 1 and 4 as 48 dB/oct cuts (four stages each) + two bells: 10 stages
+            TrackEqParams p48 = eqBands(4);
+            p48.band[0] = EqBand{kEqLowCut, 1, 80, 0, 71, 1};
+            p48.band[3] = EqBand{kEqHighCut, 1, 12000, 0, 71, 1};
+            v.setEq(p48);
+            t0 = nowUnits();
+            for (int b = 0; b < n; ++b) v.render(c, o, ds, rs);
+            std::printf("    v.render %10.1f  (+ track EQ, 48 dB cuts on bands 1 + 4, 10 stages)\n", (nowUnits() - t0) / n);
+        }
         v.setEq(TrackEqParams());   // all off again: back to the plain voice
         t0 = nowUnits();
         for (int b = 0; b < n; ++b) v.render(c, o, ds, rs);

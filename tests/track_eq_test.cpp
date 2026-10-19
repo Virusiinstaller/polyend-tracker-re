@@ -518,3 +518,102 @@ TEST(eq_in_engine) {
     const TrackEqParams neutral = one(band(kEqPeak, 1000, 0, 100));
     CHECK(render(&neutral, 0) == plain);
 }
+
+// --- 48 dB/oct cuts on bands 1 and 4 -------------------------------------------
+
+TEST(eq_slope_48_response) {
+    EqBand lc = band(kEqLowCut, 1000, 0, 71);
+    lc.slope = 1;
+    TrackEqParams p = one(lc);   // band index 0: allowed
+    // 8th-order Butterworth: -3 dB at the corner, about -48 dB an octave down, flat above.
+    CHECK_NEAR(eqResponseDb(p, 1000.0f), -3.0, 0.1);
+    CHECK_NEAR(eqResponseDb(p, 500.0f), -48.2, 0.8);
+    CHECK_NEAR(eqResponseDb(p, 666.7f), -28.2, 0.8);   // 10 log10(1 + 1.5^16)
+    CHECK_NEAR(eqResponseDb(p, 10000.0f), 0.0, 0.05);
+    // 12 dB/oct for comparison: only about -12 dB an octave down.
+    lc.slope = 0;
+    CHECK_NEAR(eqResponseDb(one(lc), 500.0f), -12.0, 0.8);
+    // High cut on band index 3.
+    EqBand hc = band(kEqHighCut, 2000, 0, 71);
+    hc.slope = 1;
+    TrackEqParams q;
+    q.band[3] = hc;
+    CHECK_NEAR(eqResponseDb(q, 2000.0f), -3.0, 0.1);
+    CHECK_NEAR(eqResponseDb(q, 4000.0f), -48.2, 2.0);   // a little steeper: bilinear warping near Nyquist
+    CHECK_NEAR(eqResponseDb(q, 100.0f), 0.0, 0.05);
+    // The option does not exist on bands 2 and 3 (index 1, 2) or on other types.
+    EqBand lc2 = band(kEqLowCut, 1000, 0, 71);
+    lc2.slope = 1;
+    TrackEqParams r;
+    r.band[1] = lc2;
+    CHECK_NEAR(eqResponseDb(r, 500.0f), -12.0, 0.8);
+    EqBand bell = band(kEqPeak, 1000, 60, 100);
+    bell.slope = 1;
+    eqSanitize(bell);
+    CHECK_EQ(bell.slope, 0);
+    // Q still shapes it: a higher Q adds a resonant bump near the corner.
+    EqBand res = band(kEqLowCut, 1000, 0, 300);
+    res.slope = 1;
+    CHECK(eqResponseDb(one(res), 1100.0f) > 0.5f);
+    // Stored units stay in range.
+    CHECK_EQ(eqStageCount(lc), 1);
+    lc.slope = 1;
+    CHECK_EQ(eqStageCount(lc), 4);
+    CHECK_EQ(eqStageCount(bell), 1);
+}
+
+TEST(eq_slope_48_process_matches_response) {
+    EqBand lc = band(kEqLowCut, 800, 0, 71);
+    lc.slope = 1;
+    EqBand hc = band(kEqHighCut, 6000, 0, 71);
+    hc.slope = 1;
+    TrackEqParams p;
+    p.band[0] = lc;
+    p.band[3] = hc;
+    for (double hz : {300.0, 530.0, 800.0, 1500.0, 3000.0, 6000.0, 9000.0}) {
+        const double want = static_cast<double>(eqResponseDb(p, static_cast<float>(hz)));
+        if (want < -45.0) continue;
+        CHECK_NEAR(measureDb(p, hz), want, 0.25);
+    }
+    // Four stages are live per slope band; switching back to 12 dB frees them and clears state.
+    TrackEq eq;
+    eq.set(p);
+    CHECK(eq.active());
+    TrackEqParams off;
+    off.band[0] = lc;
+    off.band[0].slope = 0;
+    off.band[0].on = false;
+    off.band[3] = hc;
+    off.band[3].on = false;
+    eq.set(off);
+    CHECK(!eq.active());
+}
+
+TEST(eq_slope_48_stable_and_flushes) {
+    EqBand lc = band(kEqLowCut, 20, 0, 1800);
+    lc.slope = 1;
+    EqBand hc = band(kEqHighCut, 20000, 0, 1800);
+    hc.slope = 1;
+    TrackEqParams p;
+    p.band[0] = lc;
+    p.band[3] = hc;
+    TrackEq eq;
+    eq.set(p);
+    std::mt19937 rng(9);
+    std::vector<float> x(128);
+    for (int blk = 0; blk < 3000; ++blk) {
+        for (auto& v : x) v = static_cast<float>(static_cast<int>(rng() % 20001) - 10000) / 10000.0f;
+        eq.process(x.data(), 128);
+        for (float v : x) CHECK(std::isfinite(v) && std::fabs(v) < 1000.0f);
+    }
+    // A very low Q (0.10) at a low corner is still stable.
+    lc.q100 = 10;
+    lc.freqHz = 20;
+    p.band[0] = lc;
+    eq.set(p);
+    for (int blk = 0; blk < 2000; ++blk) {
+        for (auto& v : x) v = static_cast<float>(static_cast<int>(rng() % 20001) - 10000) / 10000.0f;
+        eq.process(x.data(), 128);
+        for (float v : x) CHECK(std::isfinite(v) && std::fabs(v) < 1000.0f);
+    }
+}

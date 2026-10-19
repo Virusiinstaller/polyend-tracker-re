@@ -17,7 +17,8 @@ using namespace ot::audio;
 namespace {
 TrackEqSet sample() {
     TrackEqSet s;
-    s.track[0].band[0] = EqBand{kEqLowCut, 1, 80, 0, 71};
+    s.track[0].band[0] = EqBand{kEqLowCut, 1, 80, 0, 71, 1};   // 48 dB/oct
+    s.track[5].band[3] = EqBand{kEqHighCut, 1, 9000, 0, 120, 1};
     s.track[0].band[2] = EqBand{kEqPeak, 1, 2500, -45, 320};
     s.track[7].band[3] = EqBand{kEqHighShelf, 1, 12000, 150, 1800};
     s.track[3].band[1] = EqBand{kEqNotch, 0, 440, 0, 900};
@@ -46,6 +47,20 @@ TEST(eq_file_codec_roundtrip) {
     CHECK(decodeTrackEq(buf, sizeof(buf), r) == FmtStatus::Ok);
     CHECK(same(s, r));
     CHECK_EQ(r.track[0].band[2].gainDb10, -45);   // signed gain survives
+    CHECK_EQ(r.track[0].band[0].slope, 1);        // 48 dB/oct survives
+    CHECK_EQ(r.track[5].band[3].slope, 1);
+    CHECK(r.track[0].band[0].on);
+    // The option only exists on bands 1 and 4: a stray flag elsewhere is dropped.
+    TrackEqSet st;
+    st.track[1].band[1] = EqBand{kEqLowCut, 1, 200, 0, 71, 1};
+    st.track[1].band[0] = EqBand{kEqPeak, 1, 200, 30, 71, 1};
+    uint8_t b2[kTrackEqFileSize];
+    encodeTrackEq(st, b2);
+    TrackEqSet st2;
+    CHECK(decodeTrackEq(b2, sizeof(b2), st2) == FmtStatus::Ok);
+    CHECK_EQ(st2.track[1].band[1].slope, 0);
+    CHECK_EQ(st2.track[1].band[0].slope, 0);
+    CHECK(st2.track[1].band[1].on);
     CHECK_EQ(r.track[7].band[3].q100, 1800);
     CHECK(!r.track[3].band[1].on);
     // Defaults round-trip too.

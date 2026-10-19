@@ -18,8 +18,13 @@ Press **Master** until the page titled **Track EQ** appears (Master -> Track Mix
 
 Defaults: band 1 is a Low Cut (80 Hz), bands 2 and 3 are Bells (500 Hz, 2.5 kHz), band 4 is a High Cut (12 kHz); all start off. Any band can be changed to any type.
 
-Band types: Bell, Low Shelf, High Shelf, Low Cut (12 dB/oct), High Cut (12 dB/oct), Notch. Cut and Notch have no
-gain (as in EQ Eight). Steps: frequency 1/24 octave (coarse 1/6), gain 0.5 dB (coarse 3 dB), Q x1.06 (coarse x1.5).
+Band types: Bell, Low Shelf, High Shelf, Low Cut, High Cut, Notch. Cut and Notch have no gain (as in EQ Eight).
+
+Slope: on bands 1 and 4 only, when the type is Low Cut or High Cut, the F7 slot reads **Slope** instead of Gain and the
+jog wheel toggles 12 dB/oct (one biquad) and 48 dB/oct (8th-order Butterworth, four biquads). At 48 dB, Q shapes only the
+last (resonant) stage, by the square root of its ratio to Butterworth, so the peak stays close to a 12 dB cut's. Changing
+the type away from a cut clears the slope. A track uses at most 10 biquad stages (4 + 1 + 1 + 4); with both cuts at
+48 dB that is roughly 2 to 2.5 % of the block budget per mono track (estimate, not measured on hardware). Steps: frequency 1/24 octave (coarse 1/6), gain 0.5 dB (coarse 3 dB), Q x1.06 (coarse x1.5).
 Ranges: 20 Hz..20 kHz, +-15 dB, Q 0.10..18.00.
 
 The graph shows the combined response of the four bands (log frequency, +-15 dB) and a marker per band.

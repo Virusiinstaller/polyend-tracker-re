@@ -34,8 +34,9 @@ void encodeTrackEq(const audio::TrackEqSet& s, uint8_t* out) {
         for (int i = 0; i < audio::kEqBands; ++i) {
             audio::EqBand b = s.track[t].band[i];
             audio::eqSanitize(b);
+            if (!audio::eqSlopeAllowed(i, b.type)) b.slope = 0;
             p[0] = b.type;
-            p[1] = b.on ? 1 : 0;
+            p[1] = uint8_t((b.on ? 1 : 0) | (b.slope ? 2 : 0));
             wrU16(p + 2, b.freqHz);
             wrU16(p + 4, uint16_t(b.gainDb10));
             wrU16(p + 6, b.q100);
@@ -55,11 +56,13 @@ FmtStatus decodeTrackEq(const uint8_t* data, uint32_t len, audio::TrackEqSet& s)
         for (int i = 0; i < audio::kEqBands; ++i) {
             audio::EqBand& b = r.track[t].band[i];
             b.type = p[0];
-            b.on = p[1] != 0;
+            b.on = (p[1] & 1) != 0;
+            b.slope = (p[1] & 2) ? 1 : 0;
             b.freqHz = rdU16(p + 2);
             b.gainDb10 = rdI16(p + 4);
             b.q100 = rdU16(p + 6);
             audio::eqSanitize(b);
+            if (!audio::eqSlopeAllowed(i, b.type)) b.slope = 0;
             p += kBandBytes;
         }
     s = r;

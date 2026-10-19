@@ -48,9 +48,11 @@ struct EqBand {
     uint16_t freqHz = 1000;      // kEqFreqMin..kEqFreqMax
     int16_t gainDb10 = 0;        // -kEqGainMax..kEqGainMax
     uint16_t q100 = 71;          // kEqQMin..kEqQMax
+    uint8_t slope = 0;           // cuts of bands 1 and 4 only: 0 = 12 dB/oct, 1 = 48 dB/oct (eqSlopeAllowed)
 
     bool operator==(const EqBand& o) const {
-        return type == o.type && on == o.on && freqHz == o.freqHz && gainDb10 == o.gainDb10 && q100 == o.q100;
+        return type == o.type && on == o.on && freqHz == o.freqHz && gainDb10 == o.gainDb10 && q100 == o.q100 &&
+               slope == o.slope;
     }
     bool operator!=(const EqBand& o) const { return !(*this == o); }
 };
@@ -74,6 +76,14 @@ struct TrackEqSet {
 
 inline bool eqUsesGain(uint8_t type) { return type == kEqPeak || type == kEqLowShelf || type == kEqHighShelf; }
 const char* eqTypeName(uint8_t type);
+// The 48 dB/oct option exists for the cut types of bands 1 and 4 (index 0 and 3).
+inline bool eqSlopeAllowed(int bandIndex, uint8_t type) {
+    return (bandIndex == 0 || bandIndex == 3) && (type == kEqLowCut || type == kEqHighCut);
+}
+// Biquad stages the band needs: 4 for a 48 dB/oct cut (8th-order Butterworth), else 1.
+inline int eqStageCount(const EqBand& b) {
+    return b.slope && (b.type == kEqLowCut || b.type == kEqHighCut) ? 4 : 1;
+}
 
 // Factory layout of band i (all bands off): low cut 80 Hz, bells at 500 Hz
 // and 2.5 kHz, high cut 12 kHz.
@@ -92,7 +102,13 @@ uint8_t eqStepType(uint8_t type, int d);                   // wraps
 // RBJ biquad coefficients of one band, normalised (a0 = 1):
 // c[0..4] = b0, b1, b2, a1, a2. The frequency is limited to 0.45 fs.
 // Pure function of the stored units (used by the DSP and the UI curve).
+// This is the single-stage (12 dB/oct) form; see eqStageCoefficients.
 void eqCoefficients(const EqBand& b, float c[5]);
+// Coefficients of stage `stage` (0 .. eqStageCount-1) of a band. A 48 dB/oct cut
+// is four biquads with the Butterworth Q of an 8th-order filter; the Q control
+// scales the resonant (last) stage by sqrt(q / 0.7071), so Q 0.71 = plain
+// Butterworth and higher Q adds resonance at the corner.
+void eqStageCoefficients(const EqBand& b, int stage, float c[5]);
 // True when the band changes the signal at all (cut / notch always; bell and
 // shelves only with a non-zero gain).
 bool eqBandActive(const EqBand& b);
@@ -120,7 +136,9 @@ private:
         EqBand cfg;
         bool live = false;
     };
-    Stage st_[kEqBands];
+    // Band 1 and band 4 can use four stages (48 dB/oct cut), bands 2 and 3 one.
+    static constexpr int kStages = 10;
+    Stage st_[kStages];
     uint8_t n_ = 0;   // stages with live == true
 };
 

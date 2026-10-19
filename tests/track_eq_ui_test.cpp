@@ -135,3 +135,39 @@ TEST(eq_page_draws_within_the_display_list_budget) {
     h.tap(btn::F2);   // forces a redraw
     CHECK(h.disp.lastHasText("Track EQ"));
 }
+
+TEST(eq_page_slope_option_on_bands_1_and_4) {
+    Harness h;
+    App& a = *h.app;
+    eqPage(h);
+    // Band 1 is a Low Cut: F7 is "Slope", the jog switches 12 <-> 48 dB/oct.
+    CHECK_STR(a.ui.bar.label[6].top, "Slope");
+    CHECK_STR(a.ui.bar.label[6].bottom, "12 dB");
+    h.tap(btn::F7);
+    h.enc(1);
+    CHECK_EQ(a.trackEq.track[0].band[0].slope, 1);
+    CHECK(a.trackEq.track[0].band[0].on);
+    CHECK_STR(a.ui.bar.label[6].bottom, "48 dB");
+    h.enc(1);
+    CHECK_EQ(a.trackEq.track[0].band[0].slope, 0);
+    h.enc(1);
+    CHECK_EQ(a.trackEq.track[0].band[0].slope, 1);
+    // Band 4 (F4) is a High Cut: same control.
+    h.tap(btn::F4);
+    CHECK_STR(a.ui.bar.label[6].top, "Slope");
+    h.enc(1);
+    CHECK_EQ(a.trackEq.track[0].band[3].slope, 1);
+    // Bands 2 and 3 (bells) keep Gain; a stray slope cannot appear there.
+    h.tap(btn::F2);
+    CHECK_STR(a.ui.bar.label[6].top, "Gain");
+    // Changing band 1 to a bell drops the 48 dB flag instead of hiding it.
+    h.tap(btn::F1);
+    h.tap(btn::F5);
+    h.enc(-1);   // one type back from Low Cut
+    CHECK_EQ(a.trackEq.track[0].band[0].type, kEqHighShelf);   // one step back from Low Cut
+    CHECK_EQ(a.trackEq.track[0].band[0].slope, 0);
+    CHECK_STR(a.ui.bar.label[6].top, "Gain");
+    // The engine gets the 48 dB setting.
+    h.audio.pump(2);
+    CHECK_EQ(a.engine.settings().trackEq.track[0].band[3].slope, 1);
+}

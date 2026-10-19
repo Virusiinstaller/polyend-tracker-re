@@ -8,7 +8,8 @@
 // Layout (little endian, 268 bytes):
 //   0   "OTEQ"
 //   4   u8 version (1)   5 u8 tracks (8)   6 u8 bands (4)   7 u8 reserved (0)
-//   8   tracks x bands x 8 bytes: u8 type, u8 on, u16 freq Hz, i16 gain 0.1 dB, u16 Q x100
+//   8   tracks x bands x 8 bytes: u8 type, u8 flags (bit 0 on, bit 1 48 dB/oct cut), u16 freq Hz,
+//       i16 gain 0.1 dB, u16 Q x100
 //   264 u32 CRC-32 of bytes 0..263
 // Values are sanitized on load; a bad magic / size / CRC / version is rejected
 // (the caller keeps the defaults).
