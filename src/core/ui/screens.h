@@ -7,6 +7,7 @@
 #include "app/midi_cc.h"
 #include "app/pattern_ops.h"
 #include "app/perf_presets.h"
+#include "app/sample_fx.h"
 #include "app/project_browser.h"
 #include "model/synth_patch.h"
 #include "ui/ui.h"
@@ -688,10 +689,12 @@ public:
     uint16_t startM = 0, endM = 65535;
     int focus = 0;          // page 1: 0 start, 1 end, 2 zoom, 3 effect list (spec 06 §6.3)
     int effect = 0;         // 0..16 (sfx::Effect)
-    int page = 1;           // 1 markers/effect list, 2 effect parameters
+    int page = 1;           // 1 markers/effect list, 2 effect parameters (EQ4: the four bands), 3 EQ4 band parameters
     int paramPage = 0;      // 4-parameter page on page 2
     int paramFocus = 0;     // parameter index on page 2
-    float params[17][9] = {};
+    int eqBand = 0;         // EQ4: selected band 0..3
+    int eqParam = 1;        // EQ4 page 3: 0 type, 1 freq, 2 slope / gain, 3 Q
+    float params[sfx::kEffectCount][sfx::kMaxParams] = {};
     bool undoAvail = false;
     int previewState = 0;   // 0 dirty, 1 processed (spec 06 §6.4 F7)
     // What the processed preview was made from: a different selection or
@@ -712,6 +715,13 @@ private:
     void refreshBar();
     void markerDelta(int which, int d);
     void paramDelta(int d);
+    // EQ4 (the Sample Editor's 4-band EQ effect): its block is params[kEq4].
+    audio::TrackEqParams eqGet() const;
+    void eqSet(const audio::TrackEqParams& t);
+    void eqKey(int f);      // page 2: F1..F4 select the band and switch it on / off
+    void eqChange(int d);   // page 3: edit the selected parameter of the selected band
+    void eqReset();         // page 3: Delete = factory value of the selected parameter
+    void drawEq4(Gfx& g);
     bool fits(uint32_t newFrames, uint32_t extraSamples);
     void stopPreview();
     void selection(uint32_t* s0, uint32_t* s1) const;

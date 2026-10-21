@@ -47,6 +47,25 @@ project.mt is a fixed-size stock file and is not touched. The EQ is saved in `tr
 CRC-32) next to it, in the project folder and in the Workspace (autosave). No file = EQ off. Projects that never
 used the EQ get no file. Stock firmware ignores the extra file. Format: `src/core/formats/track_eq_file.h`.
 
+## Sample Editor: EQ4 effect
+
+The same four bands are in the Sample Editor's effect list as **EQ4**, right after Equalizer. Like the other
+effects it is offline and destructive: Preview, then Apply on the Start..End selection (stereo samples run both
+channels), with the usual one-level Undo. It uses the track EQ's own filters, so the curve you see is the sound you get.
+Nothing is saved: the settings reset each time the editor is entered, as for every other effect.
+
+* Page 1: pick EQ4 in the list, F6 opens the bands page.
+* Bands page (page 2): F1..F4 = Band 1..4. A press selects the band and switches it on / off; the column shows its
+  type, frequency, gain (or cut slope) and Q. Left / Right select a band without switching it. Delete returns the
+  band to its factory layout, off. F5 = Params, F6 = Back, F7 = Preview, F8 = Apply.
+* Band parameters (page 3): the response graph with F1..F4 = Type, Freq, Slope (cuts of bands 1 and 4) or Gain, Q;
+  the jog wheel edits (Shift = coarse), Left / Right pick the parameter, Delete resets it. F5 = next band,
+  F6 = Back (to the bands page), F7 = Preview, F8 = Apply. Editing a band switches it on.
+* With no band on (or only neutral ones), Apply leaves the audio untouched.
+
+`sample_fx.h` gets a 24-value parameter block for EQ4 (`kMaxParams` 9 -> 24, `eq4Pack` / `eq4Unpack`); the graph
+and value texts are shared with the Track EQ page in `ui/eq_view.{h,cpp}`. Tests: `sample_eq4_test`.
+
 ## Code
 
 * `src/core/audio/track_eq.{h,cpp}` - parameters, RBJ cookbook biquads (transposed direct form II, float), response.
