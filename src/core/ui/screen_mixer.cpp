@@ -133,6 +133,130 @@ void body(Gfx& g, const Theme& th, int x, int w) {
     wg::panel(g, th, x, 64, w, 360, c);
     wg::blendFill(g, x, 63, w + 1, 1, c, wg::kEdgeA);
 }
+
+// --- the same chrome drawn in layers (Track Mixer / Global Mixer) ----------
+// Column by column these pages uploaded ~1830 / ~1750 words, which the FT81x
+// expands past its 8 KB RAM_DL: on hardware every frame faulted and the
+// display kept the previous screen. Headers, bodies and bars of different
+// columns never overlap, and each keeps its own drawing order, so batching
+// every layer over all columns gives the same pixels in far fewer words.
+struct Head {
+    int k;
+    char name[24];
+};
+struct Body {
+    int x, w;
+};
+void headers(Gfx& g, const Theme& th, const Head* h, int n) {
+    const uint32_t c = th.slot(slot::kTitle + 1);
+    // Soft side edges and the blended rows 31 / 59, then the bands (rows
+    // 32..58), then the names.
+    g.alpha(wg::kEdgeA);
+    g.rectsBegin(c);
+    for (int i = 0; i < n; ++i) {
+        const int x = colX(h[i].k);
+        g.rectsAdd(x - 1, 32, 1, 27);
+        g.rectsAdd(x + 97, 32, 1, 27);
+        g.rectsAdd(x, 31, 97, 1);
+        g.rectsAdd(x, 59, 97, 1);
+    }
+    g.rectsEnd();
+    g.alpha(255);
+    g.rectsBegin(c);
+    for (int i = 0; i < n; ++i) g.rectsAdd(colX(h[i].k), 32, 97, 27);
+    g.rectsEnd();
+    for (int i = 0; i < n; ++i)
+        g.text(50 + 100 * h[i].k, 45, kFont4, th.slot(slot::kTitle), h[i].name, IDisplay::kOptCenter);   // ink y 40..51 [S]
+}
+void bodies(Gfx& g, const Theme& th, const Ui& ui, const Body* b, int n) {
+    const uint32_t c = th.slot(slot::kEmptyPanel + 1);
+    // Soft side edges and the blended row 63, the panels (rows 64..424),
+    // then the bottom fades.
+    g.alpha(wg::kEdgeA);
+    g.rectsBegin(c);
+    for (int i = 0; i < n; ++i) {
+        g.rectsAdd(b[i].x - 1, 64, 1, 361);
+        g.rectsAdd(b[i].x + b[i].w + 1, 64, 1, 361);
+        g.rectsAdd(b[i].x, 63, b[i].w + 1, 1);
+    }
+    g.rectsEnd();
+    g.alpha(255);
+    g.rectsBegin(c);
+    for (int i = 0; i < n; ++i) g.rectsAdd(b[i].x, 64, b[i].w + 1, 361);
+    g.rectsEnd();
+    // Bottom fades (wg::bottomFade per body: rows 414..425, x .. x + w). A
+    // CMD_GRADIENT costs ~30 RAM_DL words on the FT81x (not the 5 it
+    // uploads), so the bodies (left to right) share one: a vertical
+    // gradient's colour depends on the row only. The gaps between bodies
+    // then get back what they had: the background, the top rows of the
+    // bottom strip (drawn under the screen) and the soft edges of the bodies
+    // next to them (rows 414..424).
+    if (n <= 0 || !th.flag(slot::kFlagBottomFade) || g.lowDetail()) return;
+    const int fy = 64 + 360 - wg::kFadeH, x0 = b[0].x, x1 = b[n - 1].x + b[n - 1].w;
+    if (!g.saveContext(7)) return;   // scissor 2 + CMD_GRADIENT 5
+    g.clip(x0, fy, x1 - x0 + 1, wg::kFadeH + 2);
+    g.gradient(x0, fy, x0, 64 + 360 + 2, c, 0x000000);
+    g.restoreContext();
+    if (n < 2) return;
+    auto gaps = [&](int y, int h) {
+        for (int i = 0; i + 1 < n; ++i) {
+            const int gx = b[i].x + b[i].w + 1;
+            g.rectsAdd(gx, y, b[i + 1].x - gx, h);
+        }
+    };
+    g.rectsBegin(th.bg);
+    gaps(fy, wg::kFadeH + 2);
+    g.rectsEnd();
+    uint32_t strip;
+    if (ui.stripUnder(strip)) {   // wg::bottomStrip inside x 1..798
+        g.alpha(230);
+        g.rectsBegin(strip);
+        gaps(wg::kStripY - 1, 1);
+        g.rectsEnd();
+        g.alpha(255);
+        g.rectsBegin(strip);
+        gaps(wg::kStripY, 1);
+        g.rectsEnd();
+    }
+    g.alpha(wg::kEdgeA);
+    g.rectsBegin(c);
+    for (int i = 0; i + 1 < n; ++i) {
+        g.rectsAdd(b[i].x + b[i].w + 1, fy, 1, 424 - fy + 1);
+        g.rectsAdd(b[i + 1].x - 1, fy, 1, 424 - fy + 1);
+    }
+    g.rectsEnd();
+    g.alpha(255);
+}
+// Bars of bar() above (y 64, h 359) in layers, with its value-0 base lines.
+void bars(Gfx& g, const Theme& th, const wg::ValueBarItem* b, int n) {
+    wg::valueBars(g, th, b, n);
+    // bar(): a value that rounds to no rows doubles the 1.5-px base line
+    // (blended rows base -1 / +1, then the base row), batched per colour.
+    auto colour = [&](int i) { return b[i].fill == wg::kThemeColour ? th.slot(slot::kValueBar) : b[i].fill; };
+    auto zero = [&](int i) { return int(float(b[i].h - 25) * b[i].value + 0.5f) <= 0; };
+    for (int core = 0; core < 2; ++core) {
+        g.alpha(core ? 255 : wg::kEdgeA);
+        for (int i = 0; i < n; ++i) {
+            if (!zero(i)) continue;
+            bool first = true;   // one batch per colour, at its first bar
+            for (int j = 0; j < i && first; ++j) first = !(zero(j) && colour(j) == colour(i));
+            if (!first) continue;
+            g.rectsBegin(colour(i));
+            for (int j = i; j < n; ++j) {
+                if (!zero(j) || colour(j) != colour(i)) continue;
+                const int fx = b[j].x + 11, fw = b[j].w - 21, base = b[j].y + b[j].h - 15;
+                if (core) {
+                    g.rectsAdd(fx, base, fw, 1);
+                } else {
+                    g.rectsAdd(fx, base - 1, fw, 1);
+                    g.rectsAdd(fx, base + 1, fw, 1);
+                }
+            }
+            g.rectsEnd();
+        }
+    }
+    g.alpha(255);
+}
 // Option list in column k (Saturation, Ping-pong, ...).
 struct Names {
     const char* const* names;
@@ -178,6 +302,19 @@ void MixerScreen::start(int opt) {
         actStep_[i] = -1;
         actUntil_[i] = 0;
     }
+    // Meters and peak-hold marks restart empty: they only update while this
+    // page is shown, so marks from an earlier visit stayed frozen after the
+    // song stopped (user report).
+    for (int t = 0; t < 8; ++t) {
+        meter[t] = meterHold[t] = 0;
+        for (float& v : hist_[t]) v = 0.0f;
+    }
+    for (int i = 0; i < 4; ++i)
+        for (int c = 0; c < 2; ++c) {
+            globalMeter[i][c] = 0;
+            for (float& v : ghist_[i][c]) v = 0.0f;
+        }
+    for (int& v : synthMeter) v = 0;
     // The entering Master press is consumed by the switch (spec 06 §0.3).
     masterPending_ = otherKeyDuringMaster_ = masterHoldFired_ = false;
     refreshBar();
@@ -913,58 +1050,71 @@ void MixerScreen::draw(Gfx& g) {
             return;
         }
         ui_.drawTitle(g, "Track Mixer 2/3", rename ? "RENAME" : nullptr);
+        // Per track a header, the fader body and bar (x 2 + 100 t) and the
+        // meter body and bar (x 52 + 100 t), in layers (headers() above).
+        Head hd[8];
+        Body bd[16];
+        wg::ValueBarItem br[16];
         for (int t = 0; t < 8; ++t) {
             const int x = colX(t);
-            char nm[24];
-            p.trackName(t, nm, sizeof(nm));
-            header(g, th, t, nm);
-            body(g, th, x, 47);
-            body(g, th, x + 50, 47);
-            bar(g, th, x, 64, 47, 359, p.u8(pf::kTrackVolume + uint32_t(t)) / 100.0f,
-                a.trackMuted(t) ? off : wg::kThemeColour);
-            bar(g, th, x + 50, 64, 47, 359, meter[t] / 100.0f, green);
+            hd[t].k = t;
+            p.trackName(t, hd[t].name, sizeof(hd[t].name));
+            bd[2 * t] = Body{x, 47};
+            bd[2 * t + 1] = Body{x + 50, 47};
+            br[2 * t] = wg::ValueBarItem{x, 64, 47, 359, p.u8(pf::kTrackVolume + uint32_t(t)) / 100.0f,
+                                         a.trackMuted(t) ? off : wg::kThemeColour};
+            br[2 * t + 1] = wg::ValueBarItem{x + 50, 64, 47, 359, meter[t] / 100.0f, green};
         }
-        headerRows(g, th, 8);
-        // Peak hold (spec 06 §4.4): a 1-px line per meter [I], one batch
-        // after the columns (they do not overlap: same pixels, fewer words).
-        bool anyHold = false;
-        for (int t = 0; t < 8; ++t) {
-            if (meterHold[t] <= meter[t]) continue;
-            if (!anyHold) g.rectsBegin(green);
-            anyHold = true;
-            const int y = 408 - int(334.0f * float(meterHold[t]) / 100.0f + 0.5f) + 1;
-            g.rectsAdd(colX(t) + 61, y, 26, 1);
+        headers(g, th, hd, 8);
+        bodies(g, th, ui_, bd, 16);
+        bars(g, th, br, 16);
+        // Peak hold (spec 06 §4.4): a 1-px line [I].
+        bool hold = false;
+        for (int t = 0; t < 8; ++t) hold = hold || meterHold[t] > meter[t];
+        if (hold) {
+            g.rectsBegin(green);
+            for (int t = 0; t < 8; ++t)
+                if (meterHold[t] > meter[t])
+                    g.rectsAdd(colX(t) + 61, 408 - int(334.0f * float(meterHold[t]) / 100.0f + 0.5f) + 1, 26, 1);
+            g.rectsEnd();
         }
-        if (anyHold) g.rectsEnd();
         return;
     }
     // spec 06 §4.5 / VISUAL_DIFF §8.13: four channels, each a 32-px fader and
     // two 32-px meters on one panel; the rest one empty panel. The engine
     // meters show each channel's level, L and R (AudioEngine::busPeak) [I].
     ui_.drawTitle(g, "Global Mixer 3/3");
+    Head hd[4 + kSynthSlotCount];
+    Body bd[4 + 2 * kSynthSlotCount];
+    wg::ValueBarItem br[12 + 2 * kSynthSlotCount];
+    int nb = 0, nr = 0;
     for (int i = 0; i < 4; ++i) {
         const int x = colX(i);
-        header(g, th, i, kGlobalNames[i]);
-        body(g, th, x, 96);
+        hd[i].k = i;
+        std::snprintf(hd[i].name, sizeof(hd[i].name), "%s", kGlobalNames[i]);
+        bd[nb++] = Body{x, 96};
         const bool muted = p.u8(kGlobalMute[i]) != 0;
-        bar(g, th, x, 64, 32, 359, p.u8(kGlobalLevel[i]) / 100.0f, muted ? off : wg::kThemeColour);
+        br[nr++] = wg::ValueBarItem{x, 64, 32, 359, p.u8(kGlobalLevel[i]) / 100.0f, muted ? off : wg::kThemeColour};
         // A muted channel's meters rest in the muted colour too [S round 3,
         // snap 010 Line In].
-        bar(g, th, x + 32, 64, 32, 359, globalMeter[i][0] / 100.0f, muted ? off : green);
-        bar(g, th, x + 64, 64, 32, 359, globalMeter[i][1] / 100.0f, muted ? off : green);
+        br[nr++] = wg::ValueBarItem{x + 32, 64, 32, 359, globalMeter[i][0] / 100.0f, muted ? off : green};
+        br[nr++] = wg::ValueBarItem{x + 64, 64, 32, 359, globalMeter[i][1] / 100.0f, muted ? off : green};
     }
     // 2.x synth slots (manual p.220): the level setting (left) and the
     // actual level (right: the live slot-bus meter), Track Mixer geometry;
     // the rest one empty panel.
     for (int s = 0; s < kSynthSlotCount; ++s) {
         const int k = kSynthCol + s, x = colX(k);
-        header(g, th, k, kSynthNames[s]);
-        body(g, th, x, 47);
-        body(g, th, x + 50, 47);
-        bar(g, th, x, 64, 47, 359, synthBar(a.synthSlot(s).gainDb));
-        bar(g, th, x + 50, 64, 47, 359, float(synthMeter[s]) / 100.0f, green);
+        hd[4 + s].k = k;
+        std::snprintf(hd[4 + s].name, sizeof(hd[4 + s].name), "%s", kSynthNames[s]);
+        bd[nb++] = Body{x, 47};
+        bd[nb++] = Body{x + 50, 47};
+        br[nr++] = wg::ValueBarItem{x, 64, 47, 359, synthBar(a.synthSlot(s).gainDb)};
+        br[nr++] = wg::ValueBarItem{x + 50, 64, 47, 359, float(synthMeter[s]) / 100.0f, green};
     }
-    headerRows(g, th, kSynthCol + kSynthSlotCount);
+    headers(g, th, hd, 4 + kSynthSlotCount);
+    bodies(g, th, ui_, bd, nb);
+    bars(g, th, br, nr);
     wg::panel(g, th, colX(7), 30, 96, wg::kPanelH - 1);
 }
 

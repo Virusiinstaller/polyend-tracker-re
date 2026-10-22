@@ -304,7 +304,10 @@ void titleBarStatus(Gfx& g, const Theme& th, const TitleStatus& s) {
         g.rectsAdd(l.iconX + l.symW - 1, kTitleCentreY - 5, 3, 12);
         g.rectsEnd();
     } else {
-        g.icon(l.iconX + l.symW - 6, kTitleCentreY - 5, kIconPlay, sc);
+        // The play triangle; the loop arrow while Shift+Play loops a pattern
+        // inside the song (stock photos: plain pattern play shows the triangle).
+        g.icon(l.iconX + l.symW - 6, kTitleCentreY - 5, st->transport == Transport::kLoopingInSong ? kIconLoop : kIconPlay,
+               sc);
     }
     formatStatusPosition(buf, sizeof(buf), st->pattern, st->step, st->hex);
     g.text(l.posX, kTitleCentreY, kFont4, sc, buf, IDisplay::kOptCenterY);
@@ -662,6 +665,76 @@ void valueBar(Gfx& g, const Theme& th, int x, int y, int w, int h, float value, 
     }
     // Value 0 still shows the 1.5-px line on the base row (Part 2 §7.4).
     band(base - (n > 0 ? n : 1) + 1, base, fc);
+}
+
+void valueBars(Gfx& g, const Theme& th, const ValueBarItem* bars, int n) {
+    const int s = slot::kValueBar;
+    const uint32_t track = th.slot(s + 3);
+    auto shown = [](const ValueBarItem& b) { return b.w - 19 > 2 && b.h - 24 > 2; };
+    // Wells: soft edges, then the wells, then the inner gradients (valueBar order).
+    g.alpha(kEdgeA);
+    g.rectsBegin(track);
+    for (int i = 0; i < n; ++i) {
+        const ValueBarItem& b = bars[i];
+        if (!shown(b)) continue;
+        const int tx = b.x + 10, ty = b.y + 11, tw = b.w - 19, tH = b.h - 24;
+        g.rectsAdd(tx - 1, ty, 1, tH);
+        g.rectsAdd(tx + tw, ty, 1, tH);
+        g.rectsAdd(tx, ty - 1, tw, 1);
+        g.rectsAdd(tx, ty + tH, tw, 1);
+    }
+    g.rectsEnd();
+    g.alpha(255);
+    g.rectsBegin(track);
+    for (int i = 0; i < n; ++i)
+        if (shown(bars[i])) g.rectsAdd(bars[i].x + 10, bars[i].y + 11, bars[i].w - 19, bars[i].h - 24);
+    g.rectsEnd();
+    if (th.flag(slot::kFlagValueBarGrad))
+        for (int i = 0; i < n; ++i) {
+            const ValueBarItem& b = bars[i];
+            if (shown(b)) g.gradientRect(b.x + 10, b.y + 11, 9 < b.w - 19 ? 9 : b.w - 19, b.h - 24, 0x000000, track, false);
+        }
+    // Fills (rows y0..y1 with soft edges), one edge batch and one fill batch
+    // per colour.
+    auto rows = [](const ValueBarItem& b, int& y0, int& y1) {
+        float v = b.value < 0 ? 0 : (b.value > 1 ? 1 : b.value);
+        const int span = b.h - 24, base = b.y + b.h - 15;
+        const int k = int(fm::ceilD(double(span) * double(v) - 1e-4));
+        y0 = base - (k > 0 ? k : 1) + 1;
+        y1 = base;
+    };
+    uint32_t colours[16];
+    int nc = 0;
+    for (int i = 0; i < n; ++i) {
+        if (!shown(bars[i])) continue;
+        const uint32_t c = pick(bars[i].fill, th.slot(s));
+        int j = 0;
+        while (j < nc && colours[j] != c) ++j;
+        if (j == nc && nc < 16) colours[nc++] = c;
+    }
+    for (int edges = 1; edges >= 0; --edges) {
+        g.alpha(edges ? kEdgeA : 255);
+        for (int j = 0; j < nc; ++j) {
+            g.rectsBegin(colours[j]);
+            for (int i = 0; i < n; ++i) {
+                const ValueBarItem& b = bars[i];
+                if (!shown(b) || pick(b.fill, th.slot(s)) != colours[j]) continue;
+                int y0, y1;
+                rows(b, y0, y1);
+                const int fx = b.x + 11, fw = b.w - 21;
+                if (edges) {
+                    g.rectsAdd(fx - 1, y0, 1, y1 - y0 + 1);
+                    g.rectsAdd(fx + fw, y0, 1, y1 - y0 + 1);
+                    g.rectsAdd(fx, y0 - 1, fw, 1);
+                    g.rectsAdd(fx, y1 + 1, fw, 1);
+                } else {
+                    g.rectsAdd(fx, y0, fw, y1 - y0 + 1);
+                }
+            }
+            g.rectsEnd();
+        }
+    }
+    g.alpha(255);
 }
 
 // ---------------------------------------------------------------------------
