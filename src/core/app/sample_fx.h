@@ -94,7 +94,11 @@ void formatParam(int fx, int i, float v, char* out, int cap);
 uint32_t outputFrames(int fx, const float* params, uint32_t n);
 // Process n input frames into out (capacity cap); returns frames written
 // (== outputFrames unless cap is smaller). in and out must not overlap.
-uint32_t process(int fx, const float* params, const int16_t* in, uint32_t n, int16_t* out, uint32_t cap);
+// `progress` (optional) is called now and then with (ctx, frames done, frames
+// total) while a long effect runs (EQ4); the other effects are quick.
+using ProgressFn = void (*)(void* ctx, uint32_t done, uint32_t total);
+uint32_t process(int fx, const float* params, const int16_t* in, uint32_t n, int16_t* out, uint32_t cap,
+                 ProgressFn progress = nullptr, void* ctx = nullptr);
 
 }  // namespace sfx
 }  // namespace ot

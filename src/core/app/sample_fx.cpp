@@ -334,7 +334,8 @@ uint32_t outputFrames(int fx, const float* p, uint32_t n) {
     }
 }
 
-uint32_t process(int fx, const float* p, const int16_t* in, uint32_t n, int16_t* out, uint32_t cap) {
+uint32_t process(int fx, const float* p, const int16_t* in, uint32_t n, int16_t* out, uint32_t cap, ProgressFn progress,
+                 void* ctx) {
     const uint32_t m = outputFrames(fx, p, n);
     const uint32_t w = m < cap ? m : cap;
     if (n == 0) {
@@ -526,6 +527,7 @@ uint32_t process(int fx, const float* p, const int16_t* in, uint32_t n, int16_t*
             }
             float buf[256];
             for (uint32_t i0 = 0; i0 < w; i0 += 256) {
+                if (progress && (i0 & 8191u) == 0 && i0) progress(ctx, i0, w);
                 const uint32_t m = w - i0 < 256 ? w - i0 : 256;
                 for (uint32_t k = 0; k < m; ++k) buf[k] = float(in[i0 + k]);
                 for (int s = 0; s < ns; ++s) {

@@ -52,7 +52,7 @@ used the EQ get no file. Stock firmware ignores the extra file. Format: `src/cor
 The same four bands are in the Sample Editor's effect list as **EQ4**, right after Equalizer. Like the other
 effects it is offline and destructive: Preview, then Apply on the Start..End selection (stereo samples run both
 channels), with the usual one-level Undo. It runs in single precision like the real-time EQ (the M4 has no hardware double; a double loop was slow on long samples). Against a double reference the difference is 1-2 LSB at normal settings and up to about 18 LSB (-65 dBFS) at extreme 20-50 Hz settings. It uses the track EQ's own filters, so the curve you see is the sound you get.
-Nothing is saved: the settings reset each time the editor is entered, as for every other effect.
+A long run shows a progress bar (it moves every few percent). When a preview plays to the end, F7 goes back from Stop to Preview (this applies to every effect). Nothing is saved: the settings reset each time the editor is entered, as for every other effect.
 
 * Page 1: pick EQ4 in the list, F6 opens the bands page.
 * Bands page (page 2): F1..F4 = Band 1..4. A press selects the band and switches it on / off; the column shows its

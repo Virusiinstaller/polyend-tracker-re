@@ -675,6 +675,7 @@ public:
     const char* name() const override { return "Sample Editor"; }
     void start(int opt) override;
     void stop() override;
+    void update(uint32_t now) override;
     void draw(Gfx& g) override;
     void onButton(uint8_t id, uint8_t state) override;
     void onEncoder(int d) override;

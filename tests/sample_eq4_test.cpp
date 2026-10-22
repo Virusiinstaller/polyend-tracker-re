@@ -278,3 +278,69 @@ TEST(eq4_single_precision_matches_double) {
         std::printf("  eq4 float vs double: band %d type %d %u Hz -> worst %d LSB\n", k.band, int(k.type), unsigned(k.freq), worst);
     }
 }
+
+namespace {
+struct Seen {
+    uint32_t calls = 0, last = 0, total = 0;
+    bool monotonic = true;
+};
+void onProgress(void* c, uint32_t done, uint32_t total) {
+    auto* s = static_cast<Seen*>(c);
+    if (done < s->last || done >= total) s->monotonic = false;
+    s->last = done;
+    s->total = total;
+    ++s->calls;
+}
+}  // namespace
+
+TEST(eq4_reports_progress) {
+    TrackEqParams t = factory();
+    t.band[1].on = true;
+    t.band[1].gainDb10 = 60;
+    float p[sfx::kMaxParams];
+    sfx::eq4Pack(t, p);
+    const auto in = sine(100000, 440, 5000);
+    std::vector<int16_t> out(in.size());
+    Seen s;
+    sfx::process(sfx::kEq4, p, in.data(), uint32_t(in.size()), out.data(), uint32_t(out.size()), onProgress, &s);
+    CHECK(s.calls >= 10);   // about every 8192 frames
+    CHECK(s.monotonic);
+    CHECK_EQ(s.total, 100000u);
+    // Same audio with or without the callback.
+    std::vector<int16_t> out2(in.size());
+    sfx::process(sfx::kEq4, p, in.data(), uint32_t(in.size()), out2.data(), uint32_t(out2.size()));
+    CHECK(out == out2);
+}
+
+TEST(eq4_preview_label_returns_when_the_sample_ends) {
+    Harness h;
+    App& a = *h.app;
+    const auto src = sine(20000, 1000, 8000);
+    std::vector<uint8_t> w(src.size() * 2 + 64);
+    w.resize(wavEncode(src.data(), uint32_t(src.size()), 1, w.data(), w.size()));
+    h.fs.files["t.wav"] = w;
+    CHECK(a.importSample("t.wav", 0));
+    a.setCurrentInstrument(0);
+    h.tap(btn::SampleEditor);
+    EditorScreen& e = ed(h);
+    e.effect = sfx::kEq4;
+    h.tap(btn::F6);
+    h.tap(btn::F7);   // Preview
+    CHECK(e.previewPlaying);
+    CHECK_STR(a.ui.bar.label[6].top, "Stop");
+    h.audio.pump(20);
+    h.run();
+    CHECK(e.previewPlaying);   // still playing after a short while
+    h.audio.pump(600);        // far past the 20000 frames
+    h.run();
+    CHECK(!a.engine.previewBufferActive());
+    CHECK(!e.previewPlaying);
+    CHECK_STR(a.ui.bar.label[6].top, "Preview");
+    // The same on the band parameter page, and a second Preview plays again.
+    h.tap(btn::F5);
+    h.tap(btn::F7);
+    CHECK_STR(a.ui.bar.label[6].top, "Stop");
+    h.audio.pump(600);
+    h.run();
+    CHECK_STR(a.ui.bar.label[6].top, "Preview");
+}

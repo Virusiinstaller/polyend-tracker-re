@@ -24,6 +24,23 @@ int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 constexpr int kWaveY = 116, kWaveH = 219, kMarkTop = 108, kMarkBottom = 334;
 constexpr int kListX = 601, kListW = 197;
 
+// Progress of a long effect (EQ4) over `ch` channels: the bar moves in steps of
+// 3 % so the screen redraw does not slow the processing.
+struct EffectProgress {
+    Ui* ui;
+    const char* title;
+    uint32_t ch, c;
+    int last;
+};
+void effectProgress(void* p, uint32_t done, uint32_t total) {
+    auto* s = static_cast<EffectProgress*>(p);
+    if (!total) return;
+    const int pct = int((uint64_t(s->c) * 100 + uint64_t(done) * 100 / total) / s->ch);
+    if (pct < s->last + 3) return;
+    s->last = pct;
+    s->ui->progress(s->title, pct);
+}
+
 void effectItem(void*, int i, char* out, int cap) { std::snprintf(out, size_t(cap), "%s", sfx::effect(i).name); }
 }  // namespace
 
@@ -88,6 +105,18 @@ void EditorScreen::enter() {
     refreshBar();
 }
 
+// The preview ended by itself (the sample reached its end): the bar goes back
+// from Stop to Preview.
+void EditorScreen::update(uint32_t now) {
+    (void)now;
+    if (previewPlaying && !app_.engine.previewBufferActive()) {
+        previewPlaying = false;
+        padPreview_ = -1;
+        midiNote_ = -1;
+        if (!inert) refreshBar();
+    }
+}
+
 void EditorScreen::stop() {
     stopPreview();
     // The undo data lives in the free bank tail, which other screens reuse.
@@ -145,7 +174,8 @@ bool EditorScreen::apply() {
             std::memcpy(dst, src + s0, size_t(sel) * sizeof(int16_t));
         } else {
             std::memcpy(dst, src, size_t(s0) * sizeof(int16_t));
-            sfx::process(effect, p, src + s0, sel, dst + s0, outSel);
+            EffectProgress ep{&ui_, "Applying", ch, c, -3};
+            sfx::process(effect, p, src + s0, sel, dst + s0, outSel, effectProgress, &ep);
             std::memcpy(dst + s0 + outSel, src + s1, size_t(len - s1) * sizeof(int16_t));
         }
         ui_.progress("Applying", int((c + 1) * 100 / ch));
@@ -216,7 +246,10 @@ bool EditorScreen::preview(int note) {
     if (previewState == 0) {
         ui_.progress("Processing", 0);
         const int16_t* cur = a.bank.data(slot_);
-        for (uint32_t c = 0; c < ch; ++c) sfx::process(effect, params[effect], cur + c * len + s0, sel, out + c * outSel, outSel);
+        for (uint32_t c = 0; c < ch; ++c) {
+            EffectProgress ep{&ui_, "Processing", ch, c, -3};
+            sfx::process(effect, params[effect], cur + c * len + s0, sel, out + c * outSel, outSel, effectProgress, &ep);
+        }
         ui_.progressDone();
         previewState = 1;
         prevS0_ = s0;
