@@ -114,6 +114,7 @@ void EditorScreen::update(uint32_t now) {
         padPreview_ = -1;
         midiNote_ = -1;
         if (!inert) refreshBar();
+        ui_.dirty();   // the main loop redraws only a dirty frame
     }
 }
 

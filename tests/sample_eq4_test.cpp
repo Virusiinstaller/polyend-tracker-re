@@ -332,7 +332,9 @@ TEST(eq4_preview_label_returns_when_the_sample_ends) {
     h.run();
     CHECK(e.previewPlaying);   // still playing after a short while
     h.audio.pump(600);        // far past the 20000 frames
+    const int swapsBefore = h.disp.swaps;
     h.run();
+    CHECK(h.disp.swaps > swapsBefore);   // the frame was redrawn (not just the label changed)
     CHECK(!a.engine.previewBufferActive());
     CHECK(!e.previewPlaying);
     CHECK_STR(a.ui.bar.label[6].top, "Preview");
