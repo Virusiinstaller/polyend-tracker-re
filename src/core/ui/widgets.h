@@ -91,7 +91,7 @@ void strokes(Gfx& g, const int (*box)[4], int n, uint32_t c);
 void dot(Gfx& g, int cx, int cy, float r, uint32_t c);
 
 // --- title bar (spec 20 §1.2) ------------------------------------------------
-enum class Transport : uint8_t { kStopped, kPlayingSong, kPlayingPattern };
+enum class Transport : uint8_t { kStopped, kPlayingSong, kPlayingPattern, kLoopingInSong };
 
 // 2.x CPU load cell [I] (docs/specs/2x-02 §2.2; stock has no CPU meter):
 // "CPU nn%" (P, the 1 s peak) or "CPU!" after an overrun, 60 x 24 px,
@@ -312,6 +312,17 @@ struct ValueBarStyle {
 // the track middle.
 void valueBar(Gfx& g, const Theme& th, int x, int y, int w, int h, float value,
               const ValueBarStyle& st = ValueBarStyle());
+// Many unipolar value bars without background (valueBar with background =
+// false, the default set) drawn in layers: all well edges in one RECTS
+// batch, all wells in one, the inner gradients, then the fills batched per
+// colour. The bars must not overlap; the pixels are then the same as one
+// valueBar call per bar, in far fewer display-list words (FT81x RAM_DL).
+struct ValueBarItem {
+    int x, y, w, h;
+    float value;
+    uint32_t fill = kThemeColour;
+};
+void valueBars(Gfx& g, const Theme& th, const ValueBarItem* bars, int n);
 
 // --- popups and text ----------------------------------------------------------
 // Popup box (class 0x06 colours): fill colour[0], 1-px outline colour[1].

@@ -201,6 +201,35 @@ TEST(performance_frame_budget) {
     r.h.tap(btn::Play);
 }
 
+// Track Mixer 2/3 and Global Mixer 3/3, playing (meters moving). Column by
+// column they uploaded ~1830 / ~1750 words and every frame faulted the
+// FT81x on hardware (the display kept the previous screen); drawn in layers
+// they stay inside the same budget as the Performance screen.
+TEST(mixer_frame_budget) {
+    Rig r;
+    r.h.tap(btn::Master);
+    r.h.run(50);
+    r.h.tap(btn::Master);   // Track Mixer 2/3
+    r.h.run(50);
+    r.h.tap(btn::Play);
+    r.play(100);
+    r.m.resetMax();
+    r.play(1000);
+    uint32_t words = r.m.maxWords;
+    std::printf("track mixer (playing): max %u DL words\n", unsigned(words));
+    r.m.printTally();
+    CHECK(words <= 1400);
+    r.h.tap(btn::Master);   // Global Mixer 3/3
+    r.play(100);
+    r.m.resetMax();
+    r.play(1000);
+    words = r.m.maxWords;
+    std::printf("global mixer (playing): max %u DL words\n", unsigned(words));
+    r.m.printTally();
+    CHECK(words <= 1400);
+    r.h.tap(btn::Play);
+}
+
 // 2.x M1: the same dense page with the window on tracks 13..16 (MIDI
 // channel tags in the Instr column) stays inside the same budget.
 TEST(pattern_playing_frame_budget_tracks_13_16) {

@@ -152,6 +152,8 @@ public:
     uint8_t separatorMask() const;
     // Strip (fill + separators), drawn under the screen; labels on top.
     void drawStrip(Gfx& g, const Theme& th) const;
+    // Fill colour drawStrip uses (stripBg, else the stripStyle variant).
+    uint32_t stripColour(const Theme& th) const;
     void drawLabels(Gfx& g, const Theme& th) const;
     void draw(Gfx& g, const Theme& th) const {
         drawStrip(g, th);
@@ -339,6 +341,14 @@ public:
     // transport glyphs, P pattern.step; hidden on the Sample Editor as
     // stock) and `right` right-aligned at x 790. The hairline under it is
     // drawn after the screen (render()).
+    // True when this frame drew the bottom strip under the screen (not while
+    // the keyboard is open); `colour` = its fill. A screen that paints over
+    // the strip's top rows (soft edge row kStripY - 1 at alpha 230, fill from
+    // kStripY) can put them back (Mixer: one fade across its columns).
+    bool stripUnder(uint32_t& colour) const {
+        colour = stripUnderC_;
+        return stripUnder_;
+    }
     void drawTitle(Gfx& g, const char* title, const char* right = nullptr);
     void drawTitle(Gfx& g, const char* title, const char* right, bool status);
     const Theme& th() const;
@@ -486,6 +496,8 @@ private:
     uint32_t now_ = 0;
     uint32_t lastRender_ = 0;
     bool dirty_ = true;
+    bool stripUnder_ = false;             // this frame drew the bottom strip under the screen
+    uint32_t stripUnderC_ = 0;            // its fill colour
     bool titleDrawn_ = false;             // this frame drew a title bar (hairline pending)
     // Last drawTitle() arguments of the current screen (gen), redrawn under
     // the on-screen keyboard instead of the whole screen.

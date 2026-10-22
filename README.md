@@ -33,13 +33,14 @@ the whole 2.x line
 - Fill, copy and paste work across all 16 tracks.
 
 ### Synth engines (instruments S1–S3)
-- **Three synth slots**, played from any track as instruments S1–S3.
+- **Four synth slots**, played from any track as instruments S1–S4.
 - Three engines, our own sound design following the Mini's parameter sets:
   - **ACD**: acid bass and lead, with a 24 dB and a ladder-style filter, and glide;
   - **VAP**: virtual-analog poly, with morphing oscillators, hard sync, 15 filter types and a
     6-slot modulation matrix;
   - **PERC**: drum kit with kick, snare, hats, cymbal, perc and tom.
-- **WTFM and FAT** patches load and save unchanged, but stay silent and show
+  - **FAT**: 3-osc virtual analog synth engine with detune control.
+- **WTFM** patches load and save unchanged, but stay silent and show
   "not available" until 2.1.
 - **Macros:** FX columns A–F drive macros 1–6, and Volume drives macro 7.
 - **Voices:** a shared pool of 4 voices by default, adjustable in Config > General > Synth
@@ -102,8 +103,7 @@ rules; not yet confirmed on a stock unit).
 
 - The synth sound is own design: settings match the Mini, the sound is close but not
   identical.
-- WTFM and FAT engines: planned for 2.1. Wavetable and granular samples play the left
-  channel only (stereo in 2.1).
+- WTFM engine: planned for 2.1.x 
 - The synth voice pool defaults to 4 because of the processor's speed.
 - USB Storage mode: back up the card before first use; Linux systems without a desktop may need
   `partprobe` or a re-plug to see the card.
