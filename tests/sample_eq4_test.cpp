@@ -1,6 +1,7 @@
 // Sample Editor EQ4 (OpenTracker extension): the offline 4-band EQ effect
 // (sample_fx kEq4) and its two pages (bands, band parameters).
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 #include "test.h"
@@ -216,4 +217,64 @@ TEST(eq4_editor_pages) {
     h.tap(btn::F4);   // Undo
     std::vector<int16_t> back(a.bank.left(0), a.bank.left(0) + a.bank.frames(0));
     CHECK(back == src);
+}
+
+// The single-precision loop against a double-precision reference (same
+// coefficients, transposed direct form II): worst settings, noise input.
+TEST(eq4_single_precision_matches_double) {
+    struct Case {
+        int band;
+        uint8_t type;
+        uint16_t freq;
+        uint16_t q;
+        uint8_t slope;
+        int16_t gain;
+    };
+    const Case cases[] = {{0, kEqLowCut, 20, 71, 1, 0},   {0, kEqLowCut, 40, 1800, 1, 0}, {0, kEqLowCut, 80, 71, 1, 0},
+                          {3, kEqHighCut, 20000, 71, 1, 0}, {3, kEqHighCut, 200, 1800, 1, 0}, {1, kEqPeak, 30, 1800, 0, 150},
+                          {1, kEqLowShelf, 20, 71, 0, -150}, {2, kEqNotch, 50, 1800, 0, 0}};
+    std::vector<int16_t> in(60000);
+    uint32_t x = 99;
+    for (auto& s : in) {
+        x = x * 1103515245u + 12345u;
+        s = int16_t(int((x >> 16) % 20001) - 10000);
+    }
+    for (const Case& k : cases) {
+        TrackEqParams t = factory();
+        EqBand& b = t.band[k.band];
+        b.on = true;
+        b.type = k.type;
+        b.freqHz = k.freq;
+        b.q100 = k.q;
+        b.slope = k.slope;
+        b.gainDb10 = k.gain;
+        float p[sfx::kMaxParams];
+        sfx::eq4Pack(t, p);
+        std::vector<int16_t> out(in.size());
+        sfx::process(sfx::kEq4, p, in.data(), uint32_t(in.size()), out.data(), uint32_t(out.size()));
+        // Reference.
+        struct St {
+            double c[5], z1 = 0, z2 = 0;
+        } st[4];
+        const int ns = eqStageCount(b);
+        for (int s = 0; s < ns; ++s) {
+            float c[5];
+            eqStageCoefficients(b, s, c);
+            for (int j = 0; j < 5; ++j) st[s].c[j] = double(c[j]);
+        }
+        int worst = 0;
+        for (size_t i = 0; i < in.size(); ++i) {
+            double v = in[i];
+            for (int s = 0; s < ns; ++s) {
+                const double y = st[s].c[0] * v + st[s].z1;
+                st[s].z1 = st[s].c[1] * v - st[s].c[3] * y + st[s].z2;
+                st[s].z2 = st[s].c[2] * v - st[s].c[4] * y;
+                v = y;
+            }
+            const double r = v > 32767.0 ? 32767.0 : v < -32768.0 ? -32768.0 : std::round(v);
+            worst = std::max(worst, std::abs(int(out[i]) - int(r)));
+        }
+        CHECK(worst <= 24);   // float rounding: 1-2 LSB at normal settings, up to ~18 (-65 dBFS) at 20-50 Hz extremes
+        std::printf("  eq4 float vs double: band %d type %d %u Hz -> worst %d LSB\n", k.band, int(k.type), unsigned(k.freq), worst);
+    }
 }

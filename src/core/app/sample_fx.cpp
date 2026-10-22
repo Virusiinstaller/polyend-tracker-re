@@ -501,38 +501,51 @@ uint32_t process(int fx, const float* p, const int16_t* in, uint32_t n, int16_t*
         }
         case kEq4: {
             // The track EQ's own biquads (audio::eqStageCoefficients: the curve
-            // on screen), run in double on normalised samples, rounded and
-            // saturated. No active band: the selection is copied untouched.
+            // on screen) in single precision, transposed direct form II, like
+            // the real-time track EQ: the M4's FPU has no double, so a double
+            // loop ran through software maths and made long samples slow. Done
+            // stage by stage over blocks, rounded and saturated. No active
+            // band: the selection is copied untouched.
             audio::TrackEqParams eq;
             eq4Unpack(p, &eq);
             struct Stage {
-                double c[5], z1, z2;
+                float c[5], z1, z2;
             } st[10];
             int ns = 0;
             for (int b = 0; b < audio::kEqBands; ++b) {
                 if (!eq.band[b].on || !audio::eqBandActive(eq.band[b])) continue;
                 const int cnt = audio::eqStageCount(eq.band[b]);
                 for (int s = 0; s < cnt && ns < 10; ++s, ++ns) {
-                    float c[5];
-                    audio::eqStageCoefficients(eq.band[b], s, c);
-                    for (int k = 0; k < 5; ++k) st[ns].c[k] = double(c[k]);
-                    st[ns].z1 = st[ns].z2 = 0.0;
+                    audio::eqStageCoefficients(eq.band[b], s, st[ns].c);
+                    st[ns].z1 = st[ns].z2 = 0.0f;
                 }
             }
             if (ns == 0) {
                 std::memcpy(out, in, w * sizeof(int16_t));
                 break;
             }
-            for (uint32_t i = 0; i < w; ++i) {
-                double v = double(in[i]);
+            float buf[256];
+            for (uint32_t i0 = 0; i0 < w; i0 += 256) {
+                const uint32_t m = w - i0 < 256 ? w - i0 : 256;
+                for (uint32_t k = 0; k < m; ++k) buf[k] = float(in[i0 + k]);
                 for (int s = 0; s < ns; ++s) {
                     Stage& t = st[s];
-                    const double y = t.c[0] * v + t.z1;   // transposed direct form II
-                    t.z1 = t.c[1] * v - t.c[3] * y + t.z2;
-                    t.z2 = t.c[2] * v - t.c[4] * y;
-                    v = y;
+                    const float c0 = t.c[0], c1 = t.c[1], c2 = t.c[2], c3 = t.c[3], c4 = t.c[4];
+                    float z1 = t.z1, z2 = t.z2;
+                    for (uint32_t k = 0; k < m; ++k) {
+                        const float x = buf[k];
+                        const float y = c0 * x + z1;
+                        z1 = c1 * x - c3 * y + z2;
+                        z2 = c2 * x - c4 * y;
+                        buf[k] = y;
+                    }
+                    t.z1 = z1;
+                    t.z2 = z2;
                 }
-                out[i] = sat(v < 0.0 ? v - 0.5 : v + 0.5);
+                for (uint32_t k = 0; k < m; ++k) {
+                    const float v = buf[k];
+                    out[i0 + k] = !(v == v) ? int16_t(0) : v >= 32767.0f ? int16_t(32767) : v <= -32768.0f ? int16_t(-32768) : int16_t(std::lround(v));
+                }
             }
             break;
         }

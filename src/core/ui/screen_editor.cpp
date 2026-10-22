@@ -639,7 +639,7 @@ void EditorScreen::drawEq4(Gfx& g) {
     eqv::qText(bd, q, sizeof(q));
     const bool slopeCol = audio::eqSlopeAllowed(eqBand, bd.type);
     const char* names[5] = {"Type", "Freq", slopeCol ? "Slope" : "Gain", "Q", "Band"};
-    char bn[8];
+    char bn[16];
     std::snprintf(bn, sizeof(bn), "%d", eqBand + 1);
     const char* vals[5] = {audio::eqTypeName(bd.type), f, gn, q, bn};
     for (int k = 0; k < 5; ++k) {
