@@ -66,6 +66,25 @@ A long run shows a progress bar (it moves every few percent). When a preview pla
 `sample_fx.h` gets a 24-value parameter block for EQ4 (`kMaxParams` 9 -> 24, `eq4Pack` / `eq4Unpack`); the graph
 and value texts are shared with the Track EQ page in `ui/eq_view.{h,cpp}`. Tests: `sample_eq4_test`.
 
+## Synth instruments: Synth EQ (page 3/3)
+
+Each synth instrument slot (Synth 1..3, instruments 64..66) has its own 4-band EQ,
+the same as the Track EQ. Press Instrument Params on a synth instrument: the key
+cycles Synth Parameters 1/3, Synth Macros 2/3 and Synth EQ 3/3.
+
+- F1-F4 select a band (press the selected band again to switch it on or off),
+  F5-F8 select Type / Freq / Gain (or Slope on the cut bands) / Q, the jog wheel
+  edits it (Shift = coarse), Delete resets the selected band. Left / Right switch
+  to the previous / next synth slot.
+- Signal point: the slot's voices are summed, the EQ runs on that bus, and then slot
+  gain, pan and the reverb/delay sends follow. The sends therefore carry the EQ'd sound.
+- The EQ belongs to the slot, so every track playing that synth slot shares it. An
+  idle slot resets its filter state. PERC's per-drum send taps bypass the slot EQ.
+- Saving: the sidecar `track_eq.ote` becomes version 2 (8 tracks + Synth 1..3, 364 B)
+  only when a synth EQ is not at its factory layout; otherwise the 268 B version 1
+  file is written, so older firmware and untouched projects stay compatible.
+  `project.mt` is not changed.
+
 ## Code
 
 * `src/core/audio/track_eq.{h,cpp}` - parameters, RBJ cookbook biquads (transposed direct form II, float), response.

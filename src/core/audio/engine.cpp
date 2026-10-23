@@ -521,6 +521,7 @@ void AudioEngine::controlBlock(float blockUs) {
         c.ampTap = t == kMetronomeVoice;   // o.amp of stereo voices: metronome + side-chain track
         voices_[t].control(c);
     }
+    for (int s = 0; s < kSynthSlots; ++s) synthIn_.eq[s] = m.trackEq.synth[s];
     synthIn_.delayLevel = dl;   // synth sends scale with the Global Mixer like track sends
     synthIn_.reverbLevel = rl;
     // Synth notes follow their track's Track Mixer fader and mute / solo,

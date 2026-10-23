@@ -19,6 +19,19 @@ int clampDetents(int d) { return clampi(d, -kMaxDetents, kMaxDetents); }
 void TrackEqSet::setDefault() {
     for (auto& t : track)
         for (int i = 0; i < kEqBands; ++i) t.band[i] = eqDefaultBand(i);
+    for (auto& t : synth)
+        for (int i = 0; i < kEqBands; ++i) t.band[i] = eqDefaultBand(i);
+}
+
+bool TrackEqSet::synthIsDefault() const {
+    for (const auto& t : synth)
+        for (int i = 0; i < kEqBands; ++i) {
+            EqBand a = t.band[i];
+            eqSanitize(a);
+            if (!eqSlopeAllowed(i, a.type)) a.slope = 0;
+            if (a != eqDefaultBand(i)) return false;
+        }
+    return true;
 }
 
 const char* eqTypeName(uint8_t type) {

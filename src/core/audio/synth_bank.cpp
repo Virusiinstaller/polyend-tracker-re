@@ -11,6 +11,8 @@
 namespace ot {
 namespace audio {
 
+static_assert(kEqSynthSlots == kSynthSlots, "one slot EQ per synth slot");
+
 namespace {
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 // Step FX ids (spec 03 §3.6).
@@ -800,6 +802,8 @@ OT_FASTRUN_FN bool SynthBank::render(const SynthMixInputs& in, float* mL, float*
         const float sd = sl.mixD * in.delayLevel, sr = sl.mixE * in.reverbLevel;
         int16_t* stem = stems ? stems[s] : nullptr;
         if (!busy[s]) {
+            eqL_[s].reset();   // a silent slot starts its next note with clean filters
+            eqR_[s].reset();
             sl.gl.jump(gl);
             sl.gr.jump(gr);
             sl.sd.jump(sd);
@@ -890,6 +894,19 @@ OT_FASTRUN_FN bool SynthBank::render(const SynthMixInputs& in, float* mL, float*
             }
         }
         if (tapped) sl.eng->setSendTap(s, nullptr, nullptr, 0.0f, 0.0f);
+        // Slot EQ (OpenTracker extension): the summed voices, before the slot
+        // gain / pan, the sends and the stem. PERC's per-drum send taps above
+        // go straight to the send buses and are not equalised.
+        {
+            const uint32_t c0 = prof ? CpuMeter::stampCycles() : 0u;
+            eqL_[s].set(in.eq[s]);
+            eqR_[s].set(in.eq[s]);
+            if (eqL_[s].active()) {
+                eqL_[s].process(busL_, kBlock);
+                eqR_[s].process(busR_, kBlock);
+            }
+            if (prof) engCyc += CpuMeter::stampCycles() - c0;
+        }
         if (prof) prof_->slot[s] += engCyc;
         const float pk = mixSlot(sl, mL, mR, dsend, rsend, stem);
         // Track Mixer meters: the slot's block peak shared by its sounding

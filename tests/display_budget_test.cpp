@@ -941,6 +941,8 @@ TEST(overlay_matrix_synth) {
     r.measure("synth parameters, Gain selected");
     r.screen(btn::InstrParams, "synth macros (VAP)");
     CHECK(sy.view == SynthScreen::View::Macros);
+    r.screen(btn::InstrParams, "synth EQ (VAP)");
+    CHECK(sy.view == SynthScreen::View::Eq);
     h.tap(btn::InstrParams);
     h.tap(btn::F8);
     CHECK(sy.view == SynthScreen::View::Edit);

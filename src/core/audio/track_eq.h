@@ -25,6 +25,7 @@ namespace ot {
 namespace audio {
 
 constexpr int kEqBands = 4;
+constexpr int kEqSynthSlots = 3;   // Synth 1..3 (= audio::kSynthSlots, checked in synth_bank.cpp)
 
 enum EqType : uint8_t {
     kEqPeak = 0,
@@ -67,11 +68,13 @@ struct TrackEqParams {
     bool operator!=(const TrackEqParams& o) const { return !(*this == o); }
 };
 
-// All eight sample tracks.
+// All eight sample tracks and the three synth slots.
 struct TrackEqSet {
     TrackEqParams track[kVoices];
+    TrackEqParams synth[kEqSynthSlots];   // one EQ per synth slot (on the slot bus, before gain and sends)
     TrackEqSet() { setDefault(); }
     void setDefault();   // every band off, factory layout
+    bool synthIsDefault() const;
 };
 
 inline bool eqUsesGain(uint8_t type) { return type == kEqPeak || type == kEqLowShelf || type == kEqHighShelf; }

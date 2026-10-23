@@ -1933,10 +1933,10 @@ bool App::jobUnit(uint32_t& cost) {
             // never used it; an existing one is rewritten (also back to defaults).
             trackEqFilePath(dst, sizeof(dst), pj_.dir);
             {
-                uint8_t cur[kTrackEqFileSize], def[kTrackEqFileSize];
-                encodeTrackEq(trackEq, cur);
-                encodeTrackEq(audio::TrackEqSet(), def);
-                if ((std::memcmp(cur, def, sizeof(cur)) != 0 || f.exists(dst)) &&
+                uint8_t cur[kTrackEqFileSize] = {}, def[kTrackEqFileSize] = {};
+                const uint32_t nc = encodeTrackEq(trackEq, cur);
+                const uint32_t nd = encodeTrackEq(audio::TrackEqSet(), def);
+                if ((nc != nd || std::memcmp(cur, def, nc) != 0 || f.exists(dst)) &&
                     saveTrackEqFile(f, dst, trackEq) != FmtStatus::Ok)
                     ++pj_.loadErrors;
             }

@@ -64,6 +64,7 @@
 #include "audio/dsp.h"
 #include "audio/governor.h"
 #include "audio/synth_engine.h"
+#include "audio/track_eq.h"
 #include "audio/synth_params.h"
 #include "model/project.h"
 #include "model/synth_patch.h"
@@ -104,6 +105,9 @@ struct SynthMixInputs {
     // Track Mixer fader of each sequencer track's synth notes (TRK law; 0
     // when muted / soloed out). Tracks 9-16 have no fader (Tracker Mini): 1.
     float trackGain[16];
+    // Per-slot 4-band EQ (OpenTracker extension, audio/track_eq.h): on the slot
+    // bus after the voices, before the slot gain / pan and the sends.
+    TrackEqParams eq[kSynthSlots];
     SynthMixInputs() {
         for (float& g : trackGain) g = 1.0f;
     }
@@ -322,6 +326,7 @@ private:
         return false;
     }
     float busL_[kBlock] = {}, busR_[kBlock] = {};   // slot bus, zero between slots
+    TrackEq eqL_[kSynthSlots], eqR_[kSynthSlots];   // slot EQ, one filter set per bus channel
     volatile float peak_[kSynthSlots] = {};          // bus peaks for slotPeak()
     volatile float trackPeak_[kSynthTracks] = {};    // per-track shares for trackPeak()
     float tempo_ = 130.0f;

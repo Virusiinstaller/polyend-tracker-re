@@ -961,11 +961,13 @@ public:
     // a synth (the sample / MIDI Instrument screen opens).
     static int entrySlot(App& a, Ui& ui, int active);
 
-    enum class View : uint8_t { Params, Macros, Edit, Browser };
+    enum class View : uint8_t { Params, Macros, Edit, Browser, Eq };
     View view = View::Params;
     int slot = 0;           // 0..2
     int param = 0;          // Params page: F1..F6 (0 model .. 5 delay send)
     int macro = 0;          // Macros page: M1..M6
+    int eqBand = 0;         // EQ page (3/3): selected band 0..3
+    int eqParam = 1;        // EQ page: 0 type, 1 freq, 2 slope / gain, 3 Q
     int section = 0;        // Edit: section index
     int row = 0;            // Edit: row in the section
     // Browser (Patches/<MODEL>/*.patch, sorted).
@@ -1012,6 +1014,9 @@ private:
     void drawMacros(Gfx& g);
     void drawEdit(Gfx& g);
     void drawBrowser(Gfx& g);
+    void drawEq(Gfx& g);      // page 3/3: the slot EQ (OpenTracker extension)
+    void eqKey(int f);        // F1..F4 band (again = on / off), F5..F8 parameter
+    void eqChange(int d);
     void title(Gfx& g, const char* text);
     void audition(bool on, uint8_t note);
     int padNote_ = -1;      // pad holding the audition, -1 none

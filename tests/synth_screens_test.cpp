@@ -65,7 +65,7 @@ TEST(entry_from_instrument_and_step) {
     CHECK(a.ui.active() == kModSynth);
     CHECK(synth(a).slot == 1);
     CHECK(synth(a).view == SynthScreen::View::Params);
-    CHECK(frameHas(h, "Synth Parameters 1/2"));
+    CHECK(frameHas(h, "Synth Parameters 1/3"));
     CHECK(frameHas(h, "Synth 2 (ACD)"));
     // The Pattern cursor on an S3 step: slot 2, and S3 becomes current.
     a.setCurrentInstrument(0);
@@ -85,11 +85,14 @@ TEST(page_and_view_navigation) {
     App& a = *h.app;
     openSlot(h, 1);
     SynthScreen& s = synth(a);
-    // The Instrument Params key toggles pages 1/2.
+    // The Instrument Params key cycles the pages 1/3, 2/3, 3/3.
     h.tap(btn::InstrParams);
     CHECK(a.ui.active() == kModSynth);
     CHECK(s.view == SynthScreen::View::Macros);
-    CHECK(frameHas(h, "Synth Macros 2/2"));
+    CHECK(frameHas(h, "Synth Macros 2/3"));
+    h.tap(btn::InstrParams);
+    CHECK(s.view == SynthScreen::View::Eq);
+    CHECK(frameHas(h, "Synth EQ 3/3"));
     h.tap(btn::InstrParams);
     CHECK(s.view == SynthScreen::View::Params);
     // F2..F6 select the parameter; Left / Right move.
@@ -358,7 +361,7 @@ TEST(load_popup_preview_cancel_confirm) {
     CHECK(a.ui.bar.label[4].wide);
     CHECK_STR(a.ui.bar.label[6].top, "Cancel");
     CHECK_STR(a.ui.bar.label[7].top, "Confirm");
-    CHECK(frameHas(h, "Synth Parameters 1/2"));   // the page stays under the popup
+    CHECK(frameHas(h, "Synth Parameters 1/3"));   // the page stays under the popup
     CHECK(frameHas(h, "basic"));
     // Moving the highlight loads nothing.
     h.tap(btn::Down);
@@ -554,7 +557,9 @@ TEST(not_available_is_read_only) {
     h.tap(btn::InstrParams);
     h.enc(5);
     CHECK(a.synthSlot(0).macros[0] == r0.macros[0]);
-    h.tap(btn::InstrParams);
+    h.tap(btn::InstrParams);   // 3/3: the slot EQ
+    h.tap(btn::InstrParams);   // back to 1/3
+    CHECK(s.view == SynthScreen::View::Params);
     // The model can still be changed (to an available one).
     h.tap(btn::F1);
     h.tap(btn::Down);   // WTFM -> PERC
@@ -1430,4 +1435,50 @@ TEST(instr_hold_chooser_on_the_synth_page) {
     h.run(60);
     CHECK_EQ(a.currentInstrument(), kFirstSynthInstrument + 1);
     CHECK(a.ui.active() == kModSynth);
+}
+
+TEST(synth_eq_page_edits_the_slot_eq) {
+    Harness h;
+    App& a = *h.app;
+    openSlot(h, 1);
+    SynthScreen& s = synth(a);
+    h.tap(btn::InstrParams);
+    h.tap(btn::InstrParams);
+    CHECK(s.view == SynthScreen::View::Eq);
+    CHECK(a.trackEq.synthIsDefault());
+    // F2 selects band 2; F2 again switches it on.
+    h.tap(btn::F2);
+    CHECK_EQ(s.eqBand, 1);
+    CHECK(!a.trackEq.synth[1].band[1].on);
+    h.tap(btn::F2);
+    CHECK(a.trackEq.synth[1].band[1].on);
+    CHECK(!a.trackEq.synth[0].band[1].on);   // the slot's own EQ only
+    // F6 = Freq; the jog wheel edits it and keeps the band on.
+    h.tap(btn::F6);
+    CHECK_EQ(s.eqParam, 1);
+    const int f0 = a.trackEq.synth[1].band[1].freqHz;
+    h.enc(3);
+    CHECK(a.trackEq.synth[1].band[1].freqHz > f0);
+    // F5 = Type steps through the types.
+    h.tap(btn::F5);
+    const int t0 = a.trackEq.synth[1].band[1].type;
+    h.enc(1);
+    CHECK(a.trackEq.synth[1].band[1].type != t0);
+    CHECK(!a.trackEq.synthIsDefault());
+    h.run(5);
+    CHECK(frameHas(h, "Synth EQ 3/3"));
+    // The engine receives it.
+    h.audio.pump(2);
+    CHECK(a.engine.settings().trackEq.synth[1].band[1].on);
+    // Right goes to the next slot, Left back; Delete resets the selected band.
+    h.tap(btn::Right);
+    CHECK_EQ(s.slot, 2);
+    CHECK_EQ(a.currentInstrument(), kFirstSynthInstrument + 2);
+    h.tap(btn::Left);
+    h.tap(btn::Left);
+    CHECK_EQ(s.slot, 0);
+    h.tap(btn::Right);
+    CHECK_EQ(s.slot, 1);
+    h.tap(btn::Delete);
+    CHECK(a.trackEq.synthIsDefault());
 }

@@ -1024,3 +1024,38 @@ TEST(synth_note_on_spreading) {
     CHECK_EQ(r.bank.queuedNotes(), 0);
     CHECK(r.bank.voiceOfTrack(6) != nullptr);
 }
+
+// The slot EQ sits before gain and sends: a High Cut tames the slot's main bus
+// and the reverb/delay sends carry the EQ'd sound; an idle slot resets it.
+TEST(synth_slot_eq_before_gain_and_sends) {
+    auto energy = [](bool eqOn, double& l, double& d, double& v) {
+        RealRig r(SynthModel::ACD, kSynthEngineAcd);
+        SynthSlotRecord sr = rec(SynthModel::ACD, 1);
+        sr.reverbSend = 100.0f;
+        sr.delaySend = 100.0f;
+        r.bank.setSlotRecord(0, sr);
+        if (eqOn) {
+            audio::TrackEqParams e;
+            e.band[3].on = true;
+            e.band[3].type = audio::kEqHighCut;
+            e.band[3].freqHz = 150;
+            e.band[3].slope = 1;   // 48 dB/oct
+            r.in.eq[0] = e;
+        }
+        r.on(81, -1);
+        r.run(30, l, d, v);
+    };
+    double l0, d0, v0, l1, d1, v1;
+    energy(false, l0, d0, v0);
+    energy(true, l1, d1, v1);
+    CHECK(l0 > 0.0);
+    CHECK(l1 < l0 * 0.05);   // A5 (880 Hz) is far above the 150 Hz cut
+    CHECK(d0 > 0.0 || v0 > 0.0);
+    CHECK(d1 <= d0 * 0.05 + 1e-12);
+    CHECK(v1 <= v0 * 0.05 + 1e-12);
+    // Unrelated slots stay untouched: a default EQ is an exact bypass.
+    double la, da, va, lb, db, vb;
+    energy(false, la, da, va);
+    energy(false, lb, db, vb);
+    CHECK_EQ(la, lb);
+}

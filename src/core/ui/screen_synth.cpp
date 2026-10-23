@@ -16,6 +16,7 @@
 #include "audio/synth_params.h"
 #include "formats/patch_pb.h"
 #include "sdram_bss.h"
+#include "ui/eq_view.h"
 #include "ui/screens.h"
 
 namespace ot {
@@ -149,7 +150,7 @@ int SynthScreen::rows() const {
 void SynthScreen::start(int opt) {
     if (opt >= 1 && opt <= kSynthSlotCount) slot = opt - 1;
     else if (isSynthInstrument(app_.currentInstrument())) slot = synthSlotOf(app_.currentInstrument());
-    if (view != View::Macros) view = View::Params;
+    if (view != View::Macros && view != View::Eq) view = View::Params;
     param = clampi(param, 0, 5);
     // Edit Patch starts at its first section (the index may belong to
     // another slot's / model's section list).
@@ -241,6 +242,26 @@ void SynthScreen::refreshBar() {
             // tutorial V2 7:52). Back stays on F8 for every other row.
             b.set(7, nameRow() ? "Edit" : "Back", nullptr, !nameRow() || !ro);
             b.separators = uint8_t(0xFE & ~((1u << 5) | (1u << 6)));
+            break;
+        }
+        case View::Eq: {
+            // OpenTracker slot EQ, laid out like the Track EQ page: F1..F4 pick a
+            // band (again = on / off), F5..F8 pick the parameter the jog wheel edits.
+            const audio::EqBand& bd = app_.trackEq.synth[slot].band[eqBand];
+            for (int i = 0; i < audio::kEqBands; ++i) {
+                std::snprintf(v, sizeof(v), "Band %d", i + 1);
+                b.set(i, v, app_.trackEq.synth[slot].band[i].on ? "On" : "Off");
+            }
+            b.set(4, "Type", audio::eqTypeName(bd.type));
+            eqv::freqText(bd.freqHz, v, sizeof(v));
+            b.set(5, "Freq", v);
+            eqv::gainText(bd, eqBand, v, sizeof(v));
+            const bool slopeParam = audio::eqSlopeAllowed(eqBand, bd.type);
+            b.set(6, slopeParam ? "Slope" : "Gain", v, slopeParam || audio::eqUsesGain(bd.type));
+            eqv::qText(bd, v, sizeof(v));
+            b.set(7, "Q", v);
+            b.highlight(eqBand, true);
+            b.highlight(4 + eqParam, true);
             break;
         }
         case View::Browser:
@@ -703,8 +724,8 @@ void SynthScreen::onButton(uint8_t id, uint8_t state) {
     if (id == btn::InstrParams) {
         if (state != kPress) return;
         audition(false, 0);
-        if (view == View::Browser) closeBrowser();   // Cancel, back to page 1/2
-        else view = view == View::Params ? View::Macros : View::Params;
+        if (view == View::Browser) closeBrowser();   // Cancel, back to page 1/3
+        else view = view == View::Params ? View::Macros : view == View::Macros ? View::Eq : View::Params;
         refreshBar();
         ui_.dirty();
         return;
@@ -767,6 +788,19 @@ void SynthScreen::onButton(uint8_t id, uint8_t state) {
             else if (id == btn::Delete) resetSelected();
             else if (id == btn::Left || id == btn::Right) macro = clampi(macro + (id == btn::Right ? 1 : -1), 0, 5);
             else if (id != btn::F7 && id != btn::F8) Screen::onButton(id, state);
+            break;
+        case View::Eq:
+            if (btn::isFKey(id)) eqKey(id - btn::F1);
+            else if (id == btn::Up || id == btn::Down) eqChange(id == btn::Up ? 1 : -1);
+            else if (id == btn::Delete) {   // the selected band back to its factory layout, off
+                app_.trackEq.synth[slot].band[eqBand] = audio::eqDefaultBand(eqBand);
+                app_.markProjectDirty();
+            } else if (id == btn::Left || id == btn::Right) {   // previous / next synth slot
+                slot = clampi(slot + (id == btn::Right ? 1 : -1), 0, kSynthSlotCount - 1);
+                app_.setCurrentInstrument(uint8_t(kFirstSynthInstrument + slot));
+            } else {
+                Screen::onButton(id, state);
+            }
             break;
         case View::Edit: {
             const synthui::Section* sec = nullptr;
@@ -834,6 +868,7 @@ void SynthScreen::onEncoder(int d) {
     switch (view) {
         case View::Params: paramsChange(param == 0 ? (d > 0 ? 1 : -1) : d); break;
         case View::Macros: macroChange(d); break;
+        case View::Eq: eqChange(d); break;
         case View::Edit: editChange(d); break;
         case View::Browser:
             browserSel = clampi(browserSel + d, 0, browserCount > 0 ? browserCount - 1 : 0);
@@ -907,7 +942,7 @@ void SynthScreen::drawParams(Gfx& g) {
     const Theme& th = ui_.th();
     const SynthSlotRecord r = app_.synthSlot(slot);
     const bool ro = !available();
-    title(g, "Synth Parameters 1/2");
+    title(g, "Synth Parameters 1/3");
     // Model list above F1 (manual p.147), bars above F2..F6, the patch panel
     // above F7 / F8.
     listColumn(g, th, 0, 1, kModels, kSynthModelCount, int(r.model < uint32_t(kSynthModelCount) ? r.model : 0));
@@ -938,7 +973,7 @@ void SynthScreen::drawMacros(Gfx& g) {
     const SynthPatch& p = app_.synthPatch(slot);
     const audio::SynthSlotView sv = app_.engine.synth().slotView(slot);
     const bool ro = !available();
-    title(g, "Synth Macros 2/2");
+    title(g, "Synth Macros 2/3");
     for (int k = 0; k < audio::kSynthSeqMacros; ++k) {
         const int val = sv.overridden[k] ? sv.macro[k] : r.macros[k];
         const bool bi = p.macros[k].bipolar;
@@ -1082,6 +1117,91 @@ void SynthScreen::drawBrowser(Gfx& g) {
     if (!browserCount) g.text(wg::kRightPopupX + 100, 60, kFont3, th.slot(slot::kBottomLabel), "No patches", IDisplay::kOptCenter);
 }
 
+// ---------------------------------------------------------------------------
+// Slot EQ (page 3/3, OpenTracker extension): the same four bands as the Track
+// EQ, one set per synth slot, saved with the project (formats/track_eq_file.h).
+
+void SynthScreen::eqKey(int f) {
+    audio::EqBand& bd = app_.trackEq.synth[slot].band[eqBand];
+    if (f < audio::kEqBands) {
+        if (f == eqBand) {
+            bd.on = !bd.on;
+            app_.markProjectDirty();
+        } else {
+            eqBand = f;
+        }
+    } else {
+        eqParam = f - audio::kEqBands;
+    }
+}
+
+void SynthScreen::eqChange(int d) {
+    if (d == 0) return;
+    audio::EqBand& bd = app_.trackEq.synth[slot].band[eqBand];
+    const bool coarse = ui_.shift();
+    switch (eqParam) {
+        case 0:
+            bd.type = audio::eqStepType(bd.type, d > 0 ? 1 : -1);
+            if (!audio::eqSlopeAllowed(eqBand, bd.type)) bd.slope = 0;   // no hidden 48 dB on a bell
+            break;
+        case 1: bd.freqHz = audio::eqStepFreq(bd.freqHz, d, coarse); break;
+        case 2:
+            if (audio::eqSlopeAllowed(eqBand, bd.type)) {   // 12 <-> 48 dB/oct
+                bd.slope = bd.slope ? 0 : 1;
+                break;
+            }
+            if (!audio::eqUsesGain(bd.type)) return;
+            bd.gainDb10 = audio::eqStepGain(bd.gainDb10, d, coarse);
+            break;
+        default: bd.q100 = audio::eqStepQ(bd.q100, d, coarse); break;
+    }
+    bd.on = true;   // an edited band is audible at once
+    app_.markProjectDirty();
+}
+
+void SynthScreen::drawEq(Gfx& g) {
+    const Theme& th = ui_.th();
+    const audio::TrackEqParams& tp = app_.trackEq.synth[slot];
+    title(g, "Synth EQ 3/3");
+    eqv::drawGraph(g, th, tp, eqBand, 2, 29, 796, 255);
+    // Lower half: F1..F4 = the four bands (type / freq / gain or slope / Q),
+    // F5..F8 = the selected band's four parameters, big.
+    const uint32_t panelC = th.slot(slot::kEmptyPanel + 1);
+    const uint32_t ink = th.slot(slot::kList + 4);
+    const uint32_t dim = wg::mix(panelC, ink, 40);
+    char f[24], gn[24], q[24], hd[24];
+    for (int i = 0; i < audio::kEqBands; ++i) {
+        const audio::EqBand& bd = tp.band[i];
+        const int x = 2 + 100 * i;
+        wg::panel(g, th, x, 288, 96, 135, panelC);
+        const uint32_t c = bd.on ? ink : dim;
+        std::snprintf(hd, sizeof(hd), "Band %d", i + 1);
+        g.text(x + 48, 301, kFont4, c, hd, IDisplay::kOptCenter);
+        eqv::freqText(bd.freqHz, f, sizeof(f));
+        eqv::gainText(bd, i, gn, sizeof(gn));
+        eqv::qText(bd, q, sizeof(q));
+        const char* rows[4] = {audio::eqTypeName(bd.type), f, gn, q};
+        for (int k = 0; k < 4; ++k) g.text(x + 48, 327 + 24 * k, kFont1, c, rows[k], IDisplay::kOptCenter);
+        if (i == eqBand) g.frame(x + 4, 327 + 24 * eqParam - 10, 88, 20, th.slot(slot::kFocusFrame));
+    }
+    const audio::EqBand& bd = tp.band[eqBand];
+    eqv::freqText(bd.freqHz, f, sizeof(f));
+    eqv::gainText(bd, eqBand, gn, sizeof(gn));
+    eqv::qText(bd, q, sizeof(q));
+    const bool slopeCol = audio::eqSlopeAllowed(eqBand, bd.type);
+    const char* names[4] = {"Type", "Freq", slopeCol ? "Slope" : "Gain", "Q"};
+    const char* vals[4] = {audio::eqTypeName(bd.type), f, gn, q};
+    for (int k = 0; k < 4; ++k) {
+        const int x = 402 + 100 * k;
+        wg::panel(g, th, x, 288, 96, 135, panelC);
+        const bool off = !bd.on || (k == 2 && !slopeCol && !audio::eqUsesGain(bd.type));
+        g.text(x + 48, 301, kFont4, off ? dim : ink, names[k], IDisplay::kOptCenter);
+        g.text(x + 48, 360, kFont1, off ? dim : ink, vals[k], IDisplay::kOptCenter);
+    }
+    wg::focusFrame(g, th, 402 + 100 * eqParam - 1, 288, 402 + 100 * eqParam + 96, 422);
+    wg::focusFrame(g, th, 2 + 100 * eqBand - 1, 288, 2 + 100 * eqBand + 96, 422);
+}
+
 void SynthScreen::draw(Gfx& g) {
     refreshBar();   // FX CC overrides and the governor cap change from outside
     switch (view) {
@@ -1089,6 +1209,7 @@ void SynthScreen::draw(Gfx& g) {
         case View::Macros: drawMacros(g); break;
         case View::Edit: drawEdit(g); break;
         case View::Browser: drawBrowser(g); break;
+        case View::Eq: drawEq(g); break;
     }
 }
 
